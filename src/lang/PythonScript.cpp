@@ -46,12 +46,13 @@ StringName PythonScript::_get_global_name() const {
 
 bool PythonScript::_inherits_script(const Ref<Script> &script) const {
 	if (const PythonScript *py_script = Object::cast_to<PythonScript>(script.ptr())) {
-		return py_issubclass(metadata.type, py_script->metadata.type);
+		return py_issubclass(metadata.exposed_type, py_script->metadata.exposed_type);
 	}
 	return false;
 }
 
 StringName PythonScript::_get_instance_base_type() const {
+	// must return a godot native object
 	return metadata.extends;
 }
 
@@ -103,15 +104,25 @@ Error PythonScript::_reload(bool keep_state) {
 	ok = py_applydict(module, [](py_Name name, py_Ref val, void* ctx) -> bool {
 		PythonScriptMetadata *metadata = static_cast<PythonScriptMetadata *>(ctx);
 		const char* name_cstr = py_name2str(name);
-		if(strcmp(name_cstr, "class_name") == 0){
-
-		}else if(strcmp(name_cstr, "extends") == 0){
-			// ...
-			//
-			// x: str = godot.export_range(1, 100, 1, "or_greater")
-			// y: str
-		}else{
-
+		if(py_istype(val, tp_type)){
+			py_Type type = py_totype(val);
+			// @exposed will set `__exposed__` flag
+			bool is_exposed = py_getdict(py_tpobject(type), py_name("__exposed__"));
+			if(is_exposed) {
+				// setup metadata
+				metadata->exposed_type = type;
+				
+				while(type){
+					py_GlobalRef typeobject = py_tpobject(type);
+					int attrs_length;
+					py_Name* attrs = py_tpclassattrs(type, &attrs_length);
+					for (int i = 0; i < attrs_length; ++i) {
+						py_Name name = attrs[i];
+						py_ItemRef val = py_getdict(typeobject, name);
+					}
+					type = py_tpbase(type);
+				}
+			}
 		}
 		return true;
 	}, &metadata);
@@ -128,7 +139,7 @@ String PythonScript::_get_class_icon_path() const {
 
 bool PythonScript::_has_method(const StringName &p_method) const {
 	String name = p_method;
-	py_Ref method = py_tpfindname(metadata.type, py_name(name.utf8().get_data()));
+	py_Ref method = py_tpfindname(metadata.exposed_type, py_name(name.utf8().get_data()));
 	return py_callable(method);
 }
 
