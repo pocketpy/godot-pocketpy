@@ -1,0 +1,290 @@
+#include "PythonScript.hpp"
+
+#include "PythonScriptInstance.hpp"
+#include "PythonScriptLanguage.hpp"
+
+#include "gdextension_interface.h"
+#include "godot_cpp/core/class_db.hpp"
+#include "godot_cpp/core/error_macros.hpp"
+#include "godot_cpp/classes/engine.hpp"
+#include "godot_cpp/classes/global_constants.hpp"
+#include "godot_cpp/godot.hpp"
+
+#include <stdlib.h>
+
+namespace pkpy {
+
+PythonScript::PythonScript()
+	: ScriptExtension()
+{
+	placeholders.insert(this, {});
+}
+
+PythonScript::~PythonScript() {
+	placeholders.erase(this);
+}
+
+bool PythonScript::_editor_can_reload_from_file() {
+	return true;
+}
+
+void PythonScript::_placeholder_erased(void *p_placeholder) {
+	placeholders.get(this).erase(p_placeholder);
+}
+
+bool PythonScript::_can_instantiate() const {
+	return _is_valid() && (_is_tool() || !Engine::get_singleton()->is_editor_hint());
+}
+
+Ref<Script> PythonScript::_get_base_script() const {
+	return {};
+}
+
+StringName PythonScript::_get_global_name() const {
+	return metadata.class_name;
+}
+
+bool PythonScript::_inherits_script(const Ref<Script> &script) const {
+	if (const PythonScript *py_script = Object::cast_to<PythonScript>(script.ptr())) {
+		return py_issubclass(metadata.type, py_script->metadata.type);
+	}
+	return false;
+}
+
+StringName PythonScript::_get_instance_base_type() const {
+	return metadata.extends;
+}
+
+void *PythonScript::_instance_create(Object *for_object) const {
+	PythonScriptInstance *instance = memnew(PythonScriptInstance(for_object, Ref<PythonScript>(this)));
+	return godot::internal::gdextension_interface_script_instance_create3(PythonScriptInstance::get_script_instance_info(), instance);
+}
+
+void *PythonScript::_placeholder_instance_create(Object *for_object) const {
+	void *placeholder = godot::internal::gdextension_interface_placeholder_script_instance_create(PythonScriptLanguage::get_singleton()->_owner, this->_owner, for_object->_owner);
+	placeholders.get(this).insert(placeholder);
+	_update_placeholder_exports(placeholder);
+	return placeholder;
+}
+
+bool PythonScript::_instance_has(Object *p_object) const {
+	return PythonScriptInstance::attached_to_object(p_object);
+}
+
+bool PythonScript::_has_source_code() const {
+	return !source_code.is_empty();
+}
+
+String PythonScript::_get_source_code() const {
+	return source_code;
+}
+
+void PythonScript::_set_source_code(const String &code) {
+	source_code = code;
+	_reload(true);
+}
+
+Error PythonScript::_reload(bool keep_state) {
+	const char* filename = get_path().utf8().get_data();
+	const char* module_path = filename;
+	py_GlobalRef module = py_getmodule(module_path);
+	if(module == NULL){
+		module = py_newmodule(module_path);
+	}
+	// NOTE: old variables still exist if not overwritten
+	bool ok = py_exec(source_code.utf8().get_data(), filename, EXEC_MODE, module);
+	if(!ok) {
+		char* err = py_formatexc();
+		ERR_PRINT(err);
+		PK_FREE(err);
+		return ERR_COMPILATION_FAILED;
+	}
+
+	ok = py_applydict(module, [](py_Name name, py_Ref val, void* ctx) -> bool {
+		PythonScriptMetadata *metadata = static_cast<PythonScriptMetadata *>(ctx);
+		const char* name_cstr = py_name2str(name);
+		if(strcmp(name_cstr, "class_name") == 0){
+
+		}else if(strcmp(name_cstr, "extends") == 0){
+			// ...
+			//
+			// x: str = godot.export_range(1, 100, 1, "or_greater")
+			// y: str
+		}else{
+
+		}
+		return true;
+	}, &metadata);
+	return ok ? OK : ERR_COMPILATION_FAILED;
+}
+
+TypedArray<Dictionary> PythonScript::_get_documentation() const {
+	return {};
+}
+
+String PythonScript::_get_class_icon_path() const {
+	return metadata.icon_path;
+}
+
+bool PythonScript::_has_method(const StringName &p_method) const {
+	String name = p_method;
+	py_Ref method = py_tpfindname(metadata.type, py_name(name.utf8().get_data()));
+	return py_callable(method);
+}
+
+bool PythonScript::_has_static_method(const StringName &p_method) const {
+	return _has_method(p_method);
+}
+
+Variant PythonScript::_get_script_method_argument_count(const StringName &p_method) const {
+	if (const PythonScriptMethod *method = metadata.methods.getptr(p_method)) {
+		return method->get_argument_count();
+	}
+	else {
+		return {};
+	}
+}
+
+Dictionary PythonScript::_get_method_info(const StringName &p_method) const {
+	if (const PythonScriptMethod *method = metadata.methods.getptr(p_method)) {
+		return method->to_dictionary();
+	}
+	else {
+		return {};
+	}
+}
+
+bool PythonScript::_is_tool() const {
+	return metadata.is_tool;
+}
+
+bool PythonScript::_is_valid() const {
+	return metadata.is_valid;
+}
+
+bool PythonScript::_is_abstract() const {
+	return false;
+}
+
+ScriptLanguage *PythonScript::_get_language() const {
+	return PythonScriptLanguage::get_singleton();
+}
+
+bool PythonScript::_has_script_signal(const StringName &p_signal) const {
+	return metadata.signals.has(p_signal);
+}
+
+TypedArray<Dictionary> PythonScript::_get_script_signal_list() const {
+	TypedArray<Dictionary> signals;
+	for (auto [name, signal] : metadata.signals) {
+		signals.append(signal.to_dictionary());
+	}
+	return signals;
+}
+
+bool PythonScript::_has_property_default_value(const StringName &p_property) const {
+	return metadata.properties.has(p_property);
+}
+
+Variant PythonScript::_get_property_default_value(const StringName &p_property) const {
+	if (const PythonScriptProperty *property = metadata.properties.getptr(p_property)) {
+		return property->default_value;
+	}
+	else {
+		return {};
+	}
+}
+
+void PythonScript::_update_exports() {
+	for (void *placeholder : placeholders.get(this)) {
+		_update_placeholder_exports(placeholder);
+	}
+}
+
+TypedArray<Dictionary> PythonScript::_get_script_method_list() const {
+	TypedArray<Dictionary> methods;
+	for (auto [name, method] : metadata.methods) {
+		methods.append(method.to_dictionary());
+	}
+	return methods;
+}
+
+TypedArray<Dictionary> PythonScript::_get_script_property_list() const {
+	TypedArray<Dictionary> list;
+	for (auto [name, prop] : metadata.properties) {
+		list.append(prop.to_dictionary());
+	}
+	return list;
+}
+
+int32_t PythonScript::_get_member_line(const StringName &p_member) const {
+	if (const PythonScriptMethod *method = metadata.methods.getptr(p_member)) {
+		return method->get_line_defined();
+	}
+	return {};
+}
+
+Dictionary PythonScript::_get_constants() const {
+	return {};
+}
+
+TypedArray<StringName> PythonScript::_get_members() const {
+	TypedArray<StringName> members;
+	for (auto [name, _] : metadata.methods) {
+		members.append(name);
+	}
+	for (auto [name, _] : metadata.properties) {
+		members.append(name);
+	}
+	for (auto [name, _] : metadata.signals) {
+		members.append(name);
+	}
+	return members;
+}
+
+bool PythonScript::_is_placeholder_fallback_enabled() const {
+	return placeholder_fallback_enabled;
+}
+
+Variant PythonScript::_get_rpc_config() const {
+	return {};
+}
+
+Variant PythonScript::_new(const Variant **args, GDExtensionInt arg_count, GDExtensionCallError &error) {
+	if (!_can_instantiate()) {
+		error.error = GDEXTENSION_CALL_ERROR_INVALID_METHOD;
+		return {};
+	}
+	Variant object = ClassDB::instantiate(_get_instance_base_type());
+	if (Object *obj = object) {
+		obj->set_script(this);
+	}
+	return object;
+}
+
+const PythonScriptMetadata& PythonScript::get_metadata() const {
+	return metadata;
+}
+
+void PythonScript::_bind_methods() {
+	ClassDB::bind_vararg_method(METHOD_FLAGS_DEFAULT, "new", &PythonScript::_new);
+}
+
+String PythonScript::_to_string() const {
+	return String("[%s:%d]") % Array::make(get_class_static(), get_instance_id());
+}
+
+void PythonScript::_update_placeholder_exports(void *placeholder) const {
+	Array properties;
+	Dictionary default_values;
+	for (auto [name, property] : metadata.properties) {
+		properties.append(property.to_dictionary());
+		default_values[name] = property.instantiate_default_value();
+	}
+	godot::internal::gdextension_interface_placeholder_script_instance_update(placeholder, properties._native_ptr(), default_values._native_ptr());
+}
+
+HashMap<const PythonScript *, HashSet<void *>> PythonScript::placeholders;
+
+}
+

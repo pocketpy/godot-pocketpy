@@ -1,0 +1,7 @@
+-Igodot-cpp/gen/include
+-Igodot-cpp/include
+-Igodot-cpp/gdextension
+-Isrc
+-xc++
+-std=c++17
+-Ipocketpy/include
