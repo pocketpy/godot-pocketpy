@@ -71,11 +71,6 @@ public:
 	bool _handles_global_class_type(const String &p_type) const override;
 	Dictionary _get_global_class_name(const String &p_path) const override;
 
-	PackedStringArray get_lua_keywords() const;
-	PackedStringArray get_lua_member_keywords() const;
-
-	// LuaState *get_lua_state();
-
 	static PythonScriptLanguage *get_singleton();
 	static PythonScriptLanguage *get_or_create_singleton();
 	static void delete_singleton();
