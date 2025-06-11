@@ -24,8 +24,6 @@ struct PythonScriptProperty {
 
 	StringName getter_name;
 	StringName setter_name;
-	sol::optional<sol::protected_function> getter;  // Variant getter(self)
-	sol::optional<sol::protected_function> setter;  // void setter(self, Variant value)
 
 	bool get_value(PythonScriptInstance *self, Variant& r_value) const;
 	bool set_value(PythonScriptInstance *self, const Variant& value) const;
@@ -33,8 +31,6 @@ struct PythonScriptProperty {
 
 	PropertyInfo to_property_info() const;
 	Dictionary to_dictionary() const;
-
-	static void register_lua(lua_State *L);
 };
 
 }

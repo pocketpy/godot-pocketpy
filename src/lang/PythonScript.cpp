@@ -2,6 +2,7 @@
 
 #include "PythonScriptInstance.hpp"
 #include "PythonScriptLanguage.hpp"
+#include "Common.hpp"
 
 #include "gdextension_interface.h"
 #include "godot_cpp/core/class_db.hpp"
@@ -46,7 +47,10 @@ StringName PythonScript::_get_global_name() const {
 
 bool PythonScript::_inherits_script(const Ref<Script> &script) const {
 	if (const PythonScript *py_script = Object::cast_to<PythonScript>(script.ptr())) {
-		return py_issubclass(metadata.exposed_type, py_script->metadata.exposed_type);
+		py_Type derived = metadata.exposed_type;
+		py_Type base = py_script->metadata.exposed_type;
+		if(!derived || !base) return false;
+		return py_issubclass(derived, base);
 	}
 	return false;
 }
@@ -139,12 +143,12 @@ String PythonScript::_get_class_icon_path() const {
 
 bool PythonScript::_has_method(const StringName &p_method) const {
 	String name = p_method;
-	py_Ref method = py_tpfindname(metadata.exposed_type, py_name(name.utf8().get_data()));
+	py_Ref method = py_tpfindname(metadata.exposed_type, godot_name_to_python(p_method));
 	return py_callable(method);
 }
 
 bool PythonScript::_has_static_method(const StringName &p_method) const {
-	return _has_method(p_method);
+	return _has_method(p_method);	// TODO: check @staticmethod
 }
 
 Variant PythonScript::_get_script_method_argument_count(const StringName &p_method) const {

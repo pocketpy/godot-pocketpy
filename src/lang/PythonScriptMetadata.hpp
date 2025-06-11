@@ -15,8 +15,8 @@ struct PythonScriptMetadata {
 	py_Type exposed_type;
 
 	bool is_valid;
+	
 	bool is_tool;
-
 	StringName class_name;
 	StringName extends;
 	String icon_path;

@@ -2,14 +2,9 @@
 
 namespace pkpy {
 
-PythonScriptMethod::PythonScriptMethod(const StringName& name, sol::protected_function method)
+PythonScriptMethod::PythonScriptMethod(StringName name)
 	: name(name)
-	, method(method)
 {
-}
-
-bool PythonScriptMethod::is_valid() const {
-	return method.valid();
 }
 
 int PythonScriptMethod::get_line_defined() const {
@@ -28,10 +23,6 @@ MethodInfo PythonScriptMethod::to_method_info() const {
 
 Dictionary PythonScriptMethod::to_dictionary() const {
 	return to_method_info();
-}
-
-void PythonScriptMethod::register_lua(lua_State *L) {
-	
 }
 
 }

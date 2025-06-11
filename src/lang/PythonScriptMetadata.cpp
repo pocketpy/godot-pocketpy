@@ -10,6 +10,7 @@ void PythonScriptMetadata::setup(py_GlobalRef module) {
 
 	bool ok = py_applydict(module, [](py_Name name, py_GlobalRef val, void *ctx) -> bool {
 		PythonScriptMetadata* meta = static_cast<PythonScriptMetadata*>(ctx);
+		return true;
 	}, this);
 
 	// 	String name = key.as<String>();
@@ -54,7 +55,7 @@ void PythonScriptMetadata::setup(py_GlobalRef module) {
 void PythonScriptMetadata::clear() {
 	is_valid = false;
 	is_tool = false;
-	base_class = RefCounted::get_class_static();
+	extends = RefCounted::get_class_static();
 	class_name = StringName();
 	icon_path = String();
 	properties.clear();
