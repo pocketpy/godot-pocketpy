@@ -152,21 +152,11 @@ bool PythonScript::_has_static_method(const StringName &p_method) const {
 }
 
 Variant PythonScript::_get_script_method_argument_count(const StringName &p_method) const {
-	if (const PythonScriptMethod *method = metadata.methods.getptr(p_method)) {
-		return method->get_argument_count();
-	}
-	else {
-		return {};
-	}
+	return {};
 }
 
 Dictionary PythonScript::_get_method_info(const StringName &p_method) const {
-	if (const PythonScriptMethod *method = metadata.methods.getptr(p_method)) {
-		return method->to_dictionary();
-	}
-	else {
-		return {};
-	}
+	return {};
 }
 
 bool PythonScript::_is_tool() const {
@@ -186,28 +176,20 @@ ScriptLanguage *PythonScript::_get_language() const {
 }
 
 bool PythonScript::_has_script_signal(const StringName &p_signal) const {
-	return metadata.signals.has(p_signal);
+	return false;
 }
 
 TypedArray<Dictionary> PythonScript::_get_script_signal_list() const {
 	TypedArray<Dictionary> signals;
-	for (auto [name, signal] : metadata.signals) {
-		signals.append(signal.to_dictionary());
-	}
 	return signals;
 }
 
 bool PythonScript::_has_property_default_value(const StringName &p_property) const {
-	return metadata.properties.has(p_property);
+	return false;
 }
 
 Variant PythonScript::_get_property_default_value(const StringName &p_property) const {
-	if (const PythonScriptProperty *property = metadata.properties.getptr(p_property)) {
-		return property->default_value;
-	}
-	else {
-		return {};
-	}
+	return {};
 }
 
 void PythonScript::_update_exports() {
@@ -218,24 +200,15 @@ void PythonScript::_update_exports() {
 
 TypedArray<Dictionary> PythonScript::_get_script_method_list() const {
 	TypedArray<Dictionary> methods;
-	for (auto [name, method] : metadata.methods) {
-		methods.append(method.to_dictionary());
-	}
 	return methods;
 }
 
 TypedArray<Dictionary> PythonScript::_get_script_property_list() const {
 	TypedArray<Dictionary> list;
-	for (auto [name, prop] : metadata.properties) {
-		list.append(prop.to_dictionary());
-	}
 	return list;
 }
 
 int32_t PythonScript::_get_member_line(const StringName &p_member) const {
-	if (const PythonScriptMethod *method = metadata.methods.getptr(p_member)) {
-		return method->get_line_defined();
-	}
 	return {};
 }
 
@@ -245,15 +218,6 @@ Dictionary PythonScript::_get_constants() const {
 
 TypedArray<StringName> PythonScript::_get_members() const {
 	TypedArray<StringName> members;
-	for (auto [name, _] : metadata.methods) {
-		members.append(name);
-	}
-	for (auto [name, _] : metadata.properties) {
-		members.append(name);
-	}
-	for (auto [name, _] : metadata.signals) {
-		members.append(name);
-	}
 	return members;
 }
 
@@ -292,10 +256,6 @@ String PythonScript::_to_string() const {
 void PythonScript::_update_placeholder_exports(void *placeholder) const {
 	Array properties;
 	Dictionary default_values;
-	for (auto [name, property] : metadata.properties) {
-		properties.append(property.to_dictionary());
-		default_values[name] = property.instantiate_default_value();
-	}
 	godot::internal::gdextension_interface_placeholder_script_instance_update(placeholder, properties._native_ptr(), default_values._native_ptr());
 }
 

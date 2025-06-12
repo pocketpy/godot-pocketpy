@@ -17,4 +17,18 @@ namespace pkpy {
         return retval;
     }
 
+    inline void raise_python_error() {
+        char* msg = py_formatexc();
+        ERR_PRINT(msg);
+        PK_FREE(msg);
+    }
+
+    inline void godot_variant_to_python(py_OutRef out, const godot::Variant* val) {
+
+    }
+
+    inline void python_to_godot_variant(godot::Variant* out, py_Ref val) {
+
+    }
+
 } // namespace pkpy

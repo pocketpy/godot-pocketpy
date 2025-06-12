@@ -19,7 +19,7 @@ struct PythonScriptInstance {
 
 	Object *owner;
 	Ref<PythonScript> script;
-	py_TValue table;
+	py_TValue py;
 
 private:
 	static HashMap<Object *, PythonScriptInstance *> known_instances;

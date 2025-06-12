@@ -58,9 +58,9 @@ void PythonScriptMetadata::clear() {
 	extends = RefCounted::get_class_static();
 	class_name = StringName();
 	icon_path = String();
-	properties.clear();
-	signals.clear();
-	methods.clear();
+	// properties.clear();
+	// signals.clear();
+	// methods.clear();
 }
 
 }
