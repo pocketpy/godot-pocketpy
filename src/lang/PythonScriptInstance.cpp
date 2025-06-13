@@ -96,7 +96,7 @@ void call_func(PythonScriptInstance *p_instance, const StringName *p_method, con
 		py_StackRef arg = py_pushtmp();
 		godot_variant_to_python(arg, p_args[i]);
 	}
-	bool ok = py_vectorcall(p_argument_count, 0);
+	bool ok = py_vectorcall((uint16_t)p_argument_count, 0);
 	if(ok) {
 		python_to_godot_variant(r_return, py_retval());
 		r_error->error = GDEXTENSION_CALL_OK;

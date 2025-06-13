@@ -15,6 +15,10 @@ static struct CachedNames{
 
 
 extern "C" {
+
+#define MAGIC_METHOD(x) py_Name x;
+#include "pocketpy/xmacros/magics.h"
+#undef MAGIC_METHOD
     
 void pk_names_initialize() {
     cached_names = new CachedNames;
@@ -27,7 +31,8 @@ void pk_names_finalize() {
 
 py_Name py_namev(c11_sv name){
     StringName sn(String::utf8(name.data, name.size));
-    return reinterpret_cast<py_Name>(sn._native_ptr());
+    void* ptr = sn._native_ptr();
+    return reinterpret_cast<py_Name>(ptr);
 }
 
 c11_sv py_name2sv(py_Name index){
@@ -43,14 +48,15 @@ c11_sv py_name2sv(py_Name index){
     }
     c11_sv sv;
     sv.data = it->second.get_data();
-    sv.size = it->second.length();
+    sv.size = (int)it->second.length();
     cached_names->lock.clear();
     return sv;
 }
 
 py_Name py_name(const char* name){
     StringName sn(name);
-    return reinterpret_cast<py_Name>(sn._native_ptr());
+    void* ptr = sn._native_ptr();
+    return reinterpret_cast<py_Name>(ptr);
 }
 
 const char* py_name2str(py_Name index){
