@@ -32,7 +32,9 @@ void pk_names_finalize() {
 py_Name py_namev(c11_sv name){
     StringName sn(String::utf8(name.data, name.size));
     void* ptr = sn._native_ptr();
-    return reinterpret_cast<py_Name>(ptr);
+    py_Name retval;
+    memcpy(&retval, ptr, sizeof(py_Name));
+    return retval;
 }
 
 c11_sv py_name2sv(py_Name index){
@@ -56,7 +58,9 @@ c11_sv py_name2sv(py_Name index){
 py_Name py_name(const char* name){
     StringName sn(name);
     void* ptr = sn._native_ptr();
-    return reinterpret_cast<py_Name>(ptr);
+    py_Name retval;
+    memcpy(&retval, ptr, sizeof(py_Name));
+    return retval;
 }
 
 const char* py_name2str(py_Name index){
