@@ -18,6 +18,9 @@ set(GODOT_PROJECT_DIR "demo" CACHE STRING "The directory of a Godot project fold
 find_package(Python3 3.4 REQUIRED)
 find_program(GIT git REQUIRED)
 
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
 # Ensure godot-cpp submodule has been updated
 if(NOT EXISTS "${CMAKE_CURRENT_LIST_DIR}/godot-cpp/src")
     message(NOTICE "godot-cpp bindings source not found")
@@ -73,6 +76,7 @@ if(DOC_XML)
 endif()
 
 target_link_libraries(${LIBNAME} PRIVATE godot-cpp)
+target_link_libraries(${LIBNAME} PRIVATE pocketpy)
 
 set_target_properties(${LIBNAME}
     PROPERTIES

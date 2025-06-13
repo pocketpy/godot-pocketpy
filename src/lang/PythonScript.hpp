@@ -6,14 +6,11 @@
 
 #include "pocketpy.h"
 #include "PythonScriptMetadata.hpp"
+#include "PythonScriptLanguage.hpp"
 
 using namespace godot;
 
 namespace pkpy {
-
-class PythonFunction;
-class PythonScriptInstance;
-class PythonScriptLanguage;
 
 class PythonScript : public ScriptExtension {
 	GDCLASS(PythonScript, ScriptExtension);

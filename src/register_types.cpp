@@ -1,12 +1,10 @@
 #include "register_types.h"
 
-#include "gdexample.h"
-
 #include <gdextension_interface.h>
 #include <godot_cpp/core/defs.hpp>
 #include <godot_cpp/godot.hpp>
 
-#include <lang/PythonScript.hpp>
+#include "lang/PythonScript.hpp"
 #include "pocketpy.h"
 
 using namespace godot;
@@ -19,7 +17,7 @@ static void initialize(ModuleInitializationLevel p_level) {
 
 	py_initialize();
 
-	GDREGISTER_RUNTIME_CLASS(GDExample);
+	// GDREGISTER_RUNTIME_CLASS(GDExample);
 
 	// Python Script Language
 	ClassDB::register_abstract_class<PythonScript>();
