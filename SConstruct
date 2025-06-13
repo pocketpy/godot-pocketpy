@@ -2,6 +2,8 @@
 import os
 import sys
 
+sys.exit(1)
+
 env = SConscript("godot-cpp/SConstruct")
 
 # For reference:
