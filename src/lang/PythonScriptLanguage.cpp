@@ -9,6 +9,7 @@
 #include <godot_cpp/variant/packed_string_array.hpp>
 
 #include "PythonScript.hpp"
+#include "Common.hpp"
 
 #include "pocketpy.h"
 
@@ -23,6 +24,8 @@ void PythonScriptLanguage::_init() {
 
 	ProjectSettings *project_settings = ProjectSettings::get_singleton();
 	// add_project_setting(project_settings, LUA_PATH_SETTING, "res://?.lua;res://?/init.lua");
+
+	setup_python_bindings();
 }
 
 String PythonScriptLanguage::_get_type() const {

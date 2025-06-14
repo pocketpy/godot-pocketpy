@@ -7,6 +7,13 @@
 
 
 namespace pkpy {
+	
+struct PythonContext {
+    py_GlobalRef godot_module;
+    py_Type tp_GodotVariant;
+};
+
+PythonContext* pyctx();
 
 inline py_Name godot_name_to_python(godot::StringName name) {
 	py_Name retval;
@@ -26,7 +33,10 @@ inline void raise_python_error() {
 	PK_FREE(msg);
 }
 
-void godot_variant_to_python(py_OutRef out, const godot::Variant *val);
-void python_to_godot_variant(godot::Variant *out, py_Ref val);
+void py_newvariant(py_OutRef out, const godot::Variant *val);
+void py_newstring(py_OutRef out, godot::String val);
+
+godot::Variant py_tovariant(py_Ref val);
+void setup_python_bindings();
 
 } // namespace pkpy

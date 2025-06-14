@@ -21,7 +21,7 @@ GDExtensionBool set_func(PythonScriptInstance *p_instance, const StringName *p_n
 	bool is_defined = false;
 	if (is_defined) {
 		py_StackRef tmp = py_pushtmp();
-		godot_variant_to_python(tmp, p_value);
+		py_newvariant(tmp, p_value);
 		bool ok = py_setattr(&p_instance->py, godot_name_to_python(*p_name), tmp);
 		if (!ok)
 			raise_python_error();
@@ -38,7 +38,7 @@ GDExtensionBool get_func(PythonScriptInstance *p_instance, const StringName *p_n
 		bool ok = py_getattr(&p_instance->py, godot_name_to_python(*p_name));
 		if (!ok)
 			raise_python_error();
-		python_to_godot_variant(p_value, py_retval());
+		*p_value = py_tovariant(py_retval());
 		return true;
 	} else {
 		return false;
@@ -93,11 +93,11 @@ void call_func(PythonScriptInstance *p_instance, const StringName *p_method, con
 	py_pushmethod(godot_name_to_python(*p_method));
 	for (GDExtensionInt i = 0; i < p_argument_count; ++i) {
 		py_StackRef arg = py_pushtmp();
-		godot_variant_to_python(arg, p_args[i]);
+		py_newvariant(arg, p_args[i]);
 	}
 	bool ok = py_vectorcall((uint16_t)p_argument_count, 0);
 	if (ok) {
-		python_to_godot_variant(r_return, py_retval());
+		*r_return = py_tovariant(py_retval());
 		r_error->error = GDEXTENSION_CALL_OK;
 	} else {
 		raise_python_error();
