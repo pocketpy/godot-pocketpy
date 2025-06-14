@@ -5,5 +5,7 @@ def run(cmd: str):
     code = os.system(cmd)
     assert code == 0
 
-run("cmake -B build -DCMAKE_BUILD_TYPE=Release")
-run("cmake --build build --config Release")
+config = 'Debug'
+
+run(f"cmake -B build -DCMAKE_BUILD_TYPE={config}")
+run(f"cmake --build build --config {config}")

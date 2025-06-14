@@ -31,7 +31,6 @@
 *.out
 *.app
 
-demo/
 .sconsign.dblite
 
 build/

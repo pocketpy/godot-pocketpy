@@ -99,9 +99,7 @@ Error PythonScript::_reload(bool keep_state) {
 	// NOTE: old variables still exist if not overwritten
 	bool ok = py_exec(source_code.utf8().get_data(), filename, EXEC_MODE, module);
 	if (!ok) {
-		char *err = py_formatexc();
-		ERR_PRINT(err);
-		PK_FREE(err);
+		raise_python_error();
 		return ERR_COMPILATION_FAILED;
 	}
 
