@@ -35,3 +35,4 @@ demo/
 .sconsign.dblite
 
 build/
+__pycache__/
