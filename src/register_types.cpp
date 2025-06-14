@@ -5,6 +5,8 @@
 #include <godot_cpp/godot.hpp>
 
 #include "lang/PythonScript.hpp"
+#include "lang/PythonScriptResourceFormatLoader.hpp"
+#include "lang/PythonScriptResourceFormatSaver.hpp"
 #include "pocketpy.h"
 
 using namespace godot;
@@ -23,13 +25,22 @@ static void initialize(ModuleInitializationLevel p_level) {
 
 	ClassDB::register_abstract_class<PythonScript>();
 	ClassDB::register_abstract_class<PythonScriptLanguage>();
+	ClassDB::register_class<PythonScriptResourceFormatLoader>();
+	ClassDB::register_class<PythonScriptResourceFormatSaver>();
 	PythonScriptLanguage::get_or_create_singleton();
+	PythonScriptResourceFormatLoader::register_in_godot();
+	PythonScriptResourceFormatSaver::register_in_godot();
 }
 
 static void uninitialize(ModuleInitializationLevel p_level) {
 	if (p_level != MODULE_INITIALIZATION_LEVEL_SCENE) {
 		return;
 	}
+
+	printf("==> unregistering pocketpy classes...\n");
+	PythonScriptResourceFormatSaver::unregister_in_godot();
+	PythonScriptResourceFormatLoader::unregister_in_godot();
+	PythonScriptLanguage::delete_singleton();
 
 	printf("==> resetting pocketpy...\n");
 	py_resetallvm();

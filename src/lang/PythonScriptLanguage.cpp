@@ -8,8 +8,8 @@
 #include <godot_cpp/variant/dictionary.hpp>
 #include <godot_cpp/variant/packed_string_array.hpp>
 
-#include "PythonScript.hpp"
 #include "Common.hpp"
+#include "PythonScript.hpp"
 
 #include "pocketpy.h"
 
@@ -87,7 +87,7 @@ TypedArray<Dictionary> PythonScriptLanguage::_get_built_in_templates(const Strin
 }
 
 bool PythonScriptLanguage::_is_using_templates() {
-	return true;
+	return false;
 }
 
 Dictionary PythonScriptLanguage::_validate(const String &script, const String &path, bool validate_functions, bool validate_errors, bool validate_warnings, bool validate_safe_lines) const {
@@ -230,7 +230,7 @@ void PythonScriptLanguage::_reload_tool_script(const Ref<Script> &p_script, bool
 
 PackedStringArray PythonScriptLanguage::_get_recognized_extensions() const {
 	return godot::helpers::append_all(PackedStringArray(),
-			"py", "pyi");
+			"py");
 }
 
 TypedArray<Dictionary> PythonScriptLanguage::_get_public_functions() const {

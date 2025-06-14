@@ -90,7 +90,13 @@ void PythonScript::_set_source_code(const String &code) {
 }
 
 Error PythonScript::_reload(bool keep_state) {
-	const char *filename = get_path().utf8().get_data();
+	long long rid = get_rid().get_id();
+	if (rid == 0) {
+		return OK;
+	}
+	char filename[128];
+	snprintf(filename, sizeof(filename), "%lld", rid);
+	printf("==> reloading python script: %s\n", filename);
 	const char *module_path = filename;
 	py_GlobalRef module = py_getmodule(module_path);
 	if (module == NULL) {
@@ -230,6 +236,7 @@ Variant PythonScript::_get_rpc_config() const {
 }
 
 Variant PythonScript::_new(const Variant **args, GDExtensionInt arg_count, GDExtensionCallError &error) {
+	printf("==> PythonScript::_new called with %d args\n", (int)arg_count);
 	if (!_can_instantiate()) {
 		error.error = GDEXTENSION_CALL_ERROR_INVALID_METHOD;
 		return {};
