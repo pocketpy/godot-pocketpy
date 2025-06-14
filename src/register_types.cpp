@@ -17,16 +17,10 @@ static void initialize(ModuleInitializationLevel p_level) {
 
 	py_initialize();
 
-	// GDREGISTER_RUNTIME_CLASS(GDExample);
-
 	// Python Script Language
 	ClassDB::register_abstract_class<PythonScript>();
 	ClassDB::register_abstract_class<PythonScriptLanguage>();
-	// ClassDB::register_abstract_class<LuaScriptResourceFormatLoader>();
-	// ClassDB::register_abstract_class<LuaScriptResourceFormatSaver>();
-	// LuaScriptLanguage::get_or_create_singleton();
-	// LuaScriptResourceFormatLoader::register_in_godot();
-	// LuaScriptResourceFormatSaver::register_in_godot();
+	PythonScriptLanguage::get_or_create_singleton();
 }
 
 static void uninitialize(ModuleInitializationLevel p_level) {
@@ -39,7 +33,7 @@ static void uninitialize(ModuleInitializationLevel p_level) {
 
 extern "C" {
 // Initialization.
-GDExtensionBool GDE_EXPORT example_library_init(GDExtensionInterfaceGetProcAddress p_get_proc_address, const GDExtensionClassLibraryPtr p_library, GDExtensionInitialization *r_initialization) {
+GDExtensionBool GDE_EXPORT godot_pocketpy_library_init(GDExtensionInterfaceGetProcAddress p_get_proc_address, const GDExtensionClassLibraryPtr p_library, GDExtensionInitialization *r_initialization) {
 	godot::GDExtensionBinding::InitObject init_obj(p_get_proc_address, p_library, r_initialization);
 
 	init_obj.register_initializer(initialize);

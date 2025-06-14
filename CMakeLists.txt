@@ -14,7 +14,9 @@ endif()
 
 set(LIBNAME "godot-pocketpy" CACHE STRING "The name of the library")
 set(GODOT_PROJECT_DIR "demo" CACHE STRING "The directory of a Godot project folder")
+
 set(GODOTCPP_USE_STATIC_CPP OFF CACHE BOOL "")
+set(GODOTCPP_DEBUG_CRT OFF CACHE BOOL "")
 
 # Make sure all the dependencies are satisfied
 find_package(Python3 3.4 REQUIRED)
