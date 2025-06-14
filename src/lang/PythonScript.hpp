@@ -4,9 +4,9 @@
 #include <godot_cpp/templates/hash_map.hpp>
 #include <godot_cpp/templates/hash_set.hpp>
 
-#include "pocketpy.h"
-#include "PythonScriptMetadata.hpp"
 #include "PythonScriptLanguage.hpp"
+#include "PythonScriptMetadata.hpp"
+#include "pocketpy.h"
 
 using namespace godot;
 
@@ -58,7 +58,7 @@ public:
 
 	// Script methods
 	Variant _new(const Variant **args, GDExtensionInt arg_count, GDExtensionCallError &error);
-	const PythonScriptMetadata& get_metadata() const;
+	const PythonScriptMetadata &get_metadata() const;
 
 protected:
 	static void _bind_methods();
@@ -75,5 +75,4 @@ protected:
 	static HashMap<const PythonScript *, HashSet<void *>> placeholders;
 };
 
-}
-
+} //namespace pkpy

@@ -1,8 +1,8 @@
 #pragma once
 
+#include "pocketpy.h"
 #include <godot_cpp/classes/ref.hpp>
 #include <godot_cpp/templates/hash_map.hpp>
-#include "pocketpy.h"
 
 using namespace godot;
 
@@ -25,4 +25,4 @@ private:
 	static HashMap<Object *, PythonScriptInstance *> known_instances;
 };
 
-}
+} //namespace pkpy

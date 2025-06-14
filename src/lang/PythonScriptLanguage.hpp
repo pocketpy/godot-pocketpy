@@ -82,4 +82,4 @@ private:
 	static PythonScriptLanguage *instance;
 };
 
-}
+} //namespace pkpy

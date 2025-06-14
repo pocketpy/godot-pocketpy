@@ -8,10 +8,8 @@
 
 namespace pkpy {
 
-PythonScriptInstance::PythonScriptInstance(Object *owner, Ref<PythonScript> script)
-	: owner(owner)
-	, script(script)
-{
+PythonScriptInstance::PythonScriptInstance(Object *owner, Ref<PythonScript> script) :
+		owner(owner), script(script) {
 	known_instances.insert(owner, this);
 }
 
@@ -21,26 +19,28 @@ PythonScriptInstance::~PythonScriptInstance() {
 
 GDExtensionBool set_func(PythonScriptInstance *p_instance, const StringName *p_name, const Variant *p_value) {
 	bool is_defined = false;
-	if(is_defined){
+	if (is_defined) {
 		py_StackRef tmp = py_pushtmp();
 		godot_variant_to_python(tmp, p_value);
 		bool ok = py_setattr(&p_instance->py, godot_name_to_python(*p_name), tmp);
-		if(!ok) raise_python_error();
+		if (!ok)
+			raise_python_error();
 		py_pop();
 		return true;
-	}else{
+	} else {
 		return false;
 	}
 }
 
 GDExtensionBool get_func(PythonScriptInstance *p_instance, const StringName *p_name, Variant *p_value) {
 	bool is_defined = false;
-	if(is_defined){
+	if (is_defined) {
 		bool ok = py_getattr(&p_instance->py, godot_name_to_python(*p_name));
-		if(!ok) raise_python_error();
+		if (!ok)
+			raise_python_error();
 		python_to_godot_variant(p_value, py_retval());
 		return true;
-	}else{
+	} else {
 		return false;
 	}
 }
@@ -63,7 +63,6 @@ Object *get_owner_func(PythonScriptInstance *p_instance) {
 }
 
 void get_property_state_func(PythonScriptInstance *p_instance, GDExtensionScriptInstancePropertyStateAdd p_add_func, void *p_userdata) {
-	
 }
 
 GDExtensionScriptInstanceGetMethodList get_method_list_func;
@@ -97,10 +96,10 @@ void call_func(PythonScriptInstance *p_instance, const StringName *p_method, con
 		godot_variant_to_python(arg, p_args[i]);
 	}
 	bool ok = py_vectorcall((uint16_t)p_argument_count, 0);
-	if(ok) {
+	if (ok) {
 		python_to_godot_variant(r_return, py_retval());
 		r_error->error = GDEXTENSION_CALL_OK;
-	}else{
+	} else {
 		raise_python_error();
 		r_error->error = GDEXTENSION_CALL_ERROR_INVALID_METHOD;
 		py_clearexc(p0);
@@ -108,13 +107,12 @@ void call_func(PythonScriptInstance *p_instance, const StringName *p_method, con
 }
 
 void notification_func(PythonScriptInstance *p_instance, int32_t p_what, GDExtensionBool p_reversed) {
-
 }
 
 void to_string_func(PythonScriptInstance *p_instance, GDExtensionBool *r_is_valid, String *r_out) {
 	py_StackRef p0 = py_peek(0);
 	bool ok = py_repr(&p_instance->py);
-	if(ok) {
+	if (ok) {
 		*r_is_valid = true;
 		c11_sv sv = py_tosv(py_retval());
 		*r_out = String::utf8(sv.data, sv.size);
@@ -153,32 +151,32 @@ void free_func(PythonScriptInstance *instance) {
 }
 
 GDExtensionScriptInstanceInfo3 script_instance_info = {
-	(GDExtensionScriptInstanceSet) set_func,
-	(GDExtensionScriptInstanceGet) get_func,
-	(GDExtensionScriptInstanceGetPropertyList) get_property_list_func,
-	(GDExtensionScriptInstanceFreePropertyList2) free_property_list_func,
-	(GDExtensionScriptInstanceGetClassCategory) get_class_category_func,
-	(GDExtensionScriptInstancePropertyCanRevert) property_can_revert_func,
-	(GDExtensionScriptInstancePropertyGetRevert) property_get_revert_func,
-	(GDExtensionScriptInstanceGetOwner) get_owner_func,
-	(GDExtensionScriptInstanceGetPropertyState) get_property_state_func,
-	(GDExtensionScriptInstanceGetMethodList) get_method_list_func,
-	(GDExtensionScriptInstanceFreeMethodList2) free_method_list_func,
-	(GDExtensionScriptInstanceGetPropertyType) get_property_type_func,
-	(GDExtensionScriptInstanceValidateProperty) validate_property_func,
-	(GDExtensionScriptInstanceHasMethod) has_method_func,
-	(GDExtensionScriptInstanceGetMethodArgumentCount) get_method_argument_count_func,
-	(GDExtensionScriptInstanceCall) call_func,
-	(GDExtensionScriptInstanceNotification2) notification_func,
-	(GDExtensionScriptInstanceToString) to_string_func,
-	(GDExtensionScriptInstanceRefCountIncremented) refcount_incremented_func,
-	(GDExtensionScriptInstanceRefCountDecremented) refcount_decremented_func,
-	(GDExtensionScriptInstanceGetScript) get_script_func,
-	(GDExtensionScriptInstanceIsPlaceholder) is_placeholder_func,
-	(GDExtensionScriptInstanceSet) set_fallback_func,
-	(GDExtensionScriptInstanceGet) get_fallback_func,
-	(GDExtensionScriptInstanceGetLanguage) get_language_func,
-	(GDExtensionScriptInstanceFree) free_func,
+	(GDExtensionScriptInstanceSet)set_func,
+	(GDExtensionScriptInstanceGet)get_func,
+	(GDExtensionScriptInstanceGetPropertyList)get_property_list_func,
+	(GDExtensionScriptInstanceFreePropertyList2)free_property_list_func,
+	(GDExtensionScriptInstanceGetClassCategory)get_class_category_func,
+	(GDExtensionScriptInstancePropertyCanRevert)property_can_revert_func,
+	(GDExtensionScriptInstancePropertyGetRevert)property_get_revert_func,
+	(GDExtensionScriptInstanceGetOwner)get_owner_func,
+	(GDExtensionScriptInstanceGetPropertyState)get_property_state_func,
+	(GDExtensionScriptInstanceGetMethodList)get_method_list_func,
+	(GDExtensionScriptInstanceFreeMethodList2)free_method_list_func,
+	(GDExtensionScriptInstanceGetPropertyType)get_property_type_func,
+	(GDExtensionScriptInstanceValidateProperty)validate_property_func,
+	(GDExtensionScriptInstanceHasMethod)has_method_func,
+	(GDExtensionScriptInstanceGetMethodArgumentCount)get_method_argument_count_func,
+	(GDExtensionScriptInstanceCall)call_func,
+	(GDExtensionScriptInstanceNotification2)notification_func,
+	(GDExtensionScriptInstanceToString)to_string_func,
+	(GDExtensionScriptInstanceRefCountIncremented)refcount_incremented_func,
+	(GDExtensionScriptInstanceRefCountDecremented)refcount_decremented_func,
+	(GDExtensionScriptInstanceGetScript)get_script_func,
+	(GDExtensionScriptInstanceIsPlaceholder)is_placeholder_func,
+	(GDExtensionScriptInstanceSet)set_fallback_func,
+	(GDExtensionScriptInstanceGet)get_fallback_func,
+	(GDExtensionScriptInstanceGetLanguage)get_language_func,
+	(GDExtensionScriptInstanceFree)free_func,
 };
 GDExtensionScriptInstanceInfo3 *PythonScriptInstance::get_script_instance_info() {
 	return &script_instance_info;
@@ -187,12 +185,11 @@ GDExtensionScriptInstanceInfo3 *PythonScriptInstance::get_script_instance_info()
 PythonScriptInstance *PythonScriptInstance::attached_to_object(Object *owner) {
 	if (PythonScriptInstance **ptr = known_instances.getptr(owner)) {
 		return *ptr;
-	}
-	else {
+	} else {
 		return nullptr;
 	}
 }
 
 HashMap<Object *, PythonScriptInstance *> PythonScriptInstance::known_instances;
 
-}
+} //namespace pkpy

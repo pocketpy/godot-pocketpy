@@ -1,23 +1,22 @@
 #include "PythonScript.hpp"
 
+#include "Common.hpp"
 #include "PythonScriptInstance.hpp"
 #include "PythonScriptLanguage.hpp"
-#include "Common.hpp"
 
 #include "gdextension_interface.h"
-#include "godot_cpp/core/class_db.hpp"
-#include "godot_cpp/core/error_macros.hpp"
 #include "godot_cpp/classes/engine.hpp"
 #include "godot_cpp/classes/global_constants.hpp"
+#include "godot_cpp/core/class_db.hpp"
+#include "godot_cpp/core/error_macros.hpp"
 #include "godot_cpp/godot.hpp"
 
 #include <stdlib.h>
 
 namespace pkpy {
 
-PythonScript::PythonScript()
-	: ScriptExtension()
-{
+PythonScript::PythonScript() :
+		ScriptExtension() {
 	placeholders.insert(this, {});
 }
 
@@ -49,7 +48,8 @@ bool PythonScript::_inherits_script(const Ref<Script> &script) const {
 	if (const PythonScript *py_script = Object::cast_to<PythonScript>(script.ptr())) {
 		py_Type derived = metadata.exposed_type;
 		py_Type base = py_script->metadata.exposed_type;
-		if(!derived || !base) return false;
+		if (!derived || !base)
+			return false;
 		return py_issubclass(derived, base);
 	}
 	return false;
@@ -90,46 +90,48 @@ void PythonScript::_set_source_code(const String &code) {
 }
 
 Error PythonScript::_reload(bool keep_state) {
-	const char* filename = get_path().utf8().get_data();
-	const char* module_path = filename;
+	const char *filename = get_path().utf8().get_data();
+	const char *module_path = filename;
 	py_GlobalRef module = py_getmodule(module_path);
-	if(module == NULL){
+	if (module == NULL) {
 		module = py_newmodule(module_path);
 	}
 	// NOTE: old variables still exist if not overwritten
 	bool ok = py_exec(source_code.utf8().get_data(), filename, EXEC_MODE, module);
-	if(!ok) {
-		char* err = py_formatexc();
+	if (!ok) {
+		char *err = py_formatexc();
 		ERR_PRINT(err);
 		PK_FREE(err);
 		return ERR_COMPILATION_FAILED;
 	}
 
-	ok = py_applydict(module, [](py_Name name, py_Ref val, void* ctx) -> bool {
-		PythonScriptMetadata *metadata = static_cast<PythonScriptMetadata *>(ctx);
-		const char* name_cstr = py_name2str(name);
-		if(py_istype(val, tp_type)){
-			py_Type type = py_totype(val);
-			// @exposed will set `__exposed__` flag
-			bool is_exposed = py_getdict(py_tpobject(type), py_name("__exposed__"));
-			if(is_exposed) {
-				// setup metadata
-				metadata->exposed_type = type;
-				
-				while(type){
-					py_GlobalRef typeobject = py_tpobject(type);
-					int attrs_length;
-					py_Name* attrs = py_tpclassattrs(type, &attrs_length);
-					for (int i = 0; i < attrs_length; ++i) {
-						py_Name name = attrs[i];
-						py_ItemRef val = py_getdict(typeobject, name);
+	ok = py_applydict(
+			module, [](py_Name name, py_Ref val, void *ctx) -> bool {
+				PythonScriptMetadata *metadata = static_cast<PythonScriptMetadata *>(ctx);
+				const char *name_cstr = py_name2str(name);
+				if (py_istype(val, tp_type)) {
+					py_Type type = py_totype(val);
+					// @exposed will set `__exposed__` flag
+					bool is_exposed = py_getdict(py_tpobject(type), py_name("__exposed__"));
+					if (is_exposed) {
+						// setup metadata
+						metadata->exposed_type = type;
+
+						while (type) {
+							py_GlobalRef typeobject = py_tpobject(type);
+							int attrs_length;
+							py_Name *attrs = py_tpclassattrs(type, &attrs_length);
+							for (int i = 0; i < attrs_length; ++i) {
+								py_Name name = attrs[i];
+								py_ItemRef val = py_getdict(typeobject, name);
+							}
+							type = py_tpbase(type);
+						}
 					}
-					type = py_tpbase(type);
 				}
-			}
-		}
-		return true;
-	}, &metadata);
+				return true;
+			},
+			&metadata);
 	return ok ? OK : ERR_COMPILATION_FAILED;
 }
 
@@ -148,7 +150,7 @@ bool PythonScript::_has_method(const StringName &p_method) const {
 }
 
 bool PythonScript::_has_static_method(const StringName &p_method) const {
-	return _has_method(p_method);	// TODO: check @staticmethod
+	return _has_method(p_method); // TODO: check @staticmethod
 }
 
 Variant PythonScript::_get_script_method_argument_count(const StringName &p_method) const {
@@ -241,7 +243,7 @@ Variant PythonScript::_new(const Variant **args, GDExtensionInt arg_count, GDExt
 	return object;
 }
 
-const PythonScriptMetadata& PythonScript::get_metadata() const {
+const PythonScriptMetadata &PythonScript::get_metadata() const {
 	return metadata;
 }
 
@@ -261,5 +263,4 @@ void PythonScript::_update_placeholder_exports(void *placeholder) const {
 
 HashMap<const PythonScript *, HashSet<void *>> PythonScript::placeholders;
 
-}
-
+} //namespace pkpy

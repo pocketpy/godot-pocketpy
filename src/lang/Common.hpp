@@ -2,92 +2,31 @@
 
 #include "pocketpy.h"
 
-#include <godot_cpp/variant/variant.hpp>
 #include <godot_cpp/variant/string_name.hpp>
+#include <godot_cpp/variant/variant.hpp>
+
 
 namespace pkpy {
 
-    inline py_Name godot_name_to_python(godot::StringName name){
-        py_Name retval;
-        memcpy(&retval, &name, sizeof(py_Name));
-        return retval;
-    }
+inline py_Name godot_name_to_python(godot::StringName name) {
+	py_Name retval;
+	memcpy(&retval, &name, sizeof(py_Name));
+	return retval;
+}
 
-    inline godot::StringName python_name_to_godot(py_Name name) {
-        godot::StringName retval;
-        memcpy(&retval, &name, sizeof(godot::StringName));
-        return retval;
-    }
+inline godot::StringName python_name_to_godot(py_Name name) {
+	godot::StringName retval;
+	memcpy(&retval, &name, sizeof(godot::StringName));
+	return retval;
+}
 
-    inline void raise_python_error() {
-        char* msg = py_formatexc();
-        ERR_PRINT(msg);
-        PK_FREE(msg);
-    }
+inline void raise_python_error() {
+	char *msg = py_formatexc();
+	ERR_PRINT(msg);
+	PK_FREE(msg);
+}
 
-    inline void godot_variant_to_python(py_OutRef out, const godot::Variant* val) {
-        switch(val->get_type()) {
-			case godot::Variant::NIL:
-                py_newnone(out);
-                return;
-			case godot::Variant::BOOL:
-                py_newbool(out, val->operator bool());
-                return;
-			case godot::Variant::INT:
-                py_newint(out, val->operator int64_t());
-                return;
-			case godot::Variant::FLOAT:
-                py_newfloat(out, val->operator double());
-                return;
-			case godot::Variant::STRING: {
-                auto s = val->operator godot::String().utf8();
-                c11_sv sv;
-                sv.data = s.get_data();
-                sv.size = (int)s.length();
-                py_newstrv(out, sv);
-                return;
-            }
-			case godot::Variant::VECTOR2:
-			case godot::Variant::VECTOR2I:
-			case godot::Variant::RECT2:
-			case godot::Variant::RECT2I:
-			case godot::Variant::VECTOR3:
-			case godot::Variant::VECTOR3I:
-			case godot::Variant::TRANSFORM2D:
-			case godot::Variant::VECTOR4:
-			case godot::Variant::VECTOR4I:
-			case godot::Variant::PLANE:
-			case godot::Variant::QUATERNION:
-			case godot::Variant::AABB:
-			case godot::Variant::BASIS:
-			case godot::Variant::TRANSFORM3D:
-			case godot::Variant::PROJECTION:
-			case godot::Variant::COLOR:
-			case godot::Variant::STRING_NAME:
-			case godot::Variant::NODE_PATH:
-			case godot::Variant::RID:
-			case godot::Variant::OBJECT:
-			case godot::Variant::CALLABLE:
-			case godot::Variant::SIGNAL:
-			case godot::Variant::DICTIONARY:
-			case godot::Variant::ARRAY:
-			case godot::Variant::PACKED_BYTE_ARRAY:
-			case godot::Variant::PACKED_INT32_ARRAY:
-			case godot::Variant::PACKED_INT64_ARRAY:
-			case godot::Variant::PACKED_FLOAT32_ARRAY:
-			case godot::Variant::PACKED_FLOAT64_ARRAY:
-			case godot::Variant::PACKED_STRING_ARRAY:
-			case godot::Variant::PACKED_VECTOR2_ARRAY:
-			case godot::Variant::PACKED_VECTOR3_ARRAY:
-			case godot::Variant::PACKED_COLOR_ARRAY:
-			case godot::Variant::PACKED_VECTOR4_ARRAY:
-			case godot::Variant::VARIANT_MAX:
-				break;
-		}
-	}
-
-    inline void python_to_godot_variant(godot::Variant* out, py_Ref val) {
-
-    }
+void godot_variant_to_python(py_OutRef out, const godot::Variant *val);
+void python_to_godot_variant(godot::Variant *out, py_Ref val);
 
 } // namespace pkpy

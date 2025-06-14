@@ -26,4 +26,4 @@ struct PythonScriptMetadata {
 	void clear();
 };
 
-}
+} //namespace pkpy

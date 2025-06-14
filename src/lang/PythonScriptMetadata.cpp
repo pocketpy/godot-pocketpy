@@ -8,10 +8,12 @@ namespace pkpy {
 void PythonScriptMetadata::setup(py_GlobalRef module) {
 	is_valid = true;
 
-	bool ok = py_applydict(module, [](py_Name name, py_GlobalRef val, void *ctx) -> bool {
-		PythonScriptMetadata* meta = static_cast<PythonScriptMetadata*>(ctx);
-		return true;
-	}, this);
+	bool ok = py_applydict(
+			module, [](py_Name name, py_GlobalRef val, void *ctx) -> bool {
+				PythonScriptMetadata *meta = static_cast<PythonScriptMetadata *>(ctx);
+				return true;
+			},
+			this);
 
 	// 	String name = key.as<String>();
 	// 	if (name == "extends") {
@@ -63,4 +65,4 @@ void PythonScriptMetadata::clear() {
 	// methods.clear();
 }
 
-}
+} //namespace pkpy

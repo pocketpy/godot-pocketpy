@@ -41,13 +41,12 @@ PackedStringArray PythonScriptLanguage::_get_reserved_words() const {
 	// import keyword
 	// print(keyword.kwlist)
 	return godot::helpers::append_all(PackedStringArray(),
-		"False", "None", "True", "and", "as", "assert",
-		"async", "await", "break", "class", "continue",
-		"def", "del", "elif", "else", "except", "finally",
-		"for", "from", "global", "if", "import", "in", "is",
-		"lambda", "nonlocal", "not", "or", "pass", "raise",
-		"return", "try", "while", "with", "yield"
-	);
+			"False", "None", "True", "and", "as", "assert",
+			"async", "await", "break", "class", "continue",
+			"def", "del", "elif", "else", "except", "finally",
+			"for", "from", "global", "if", "import", "in", "is",
+			"lambda", "nonlocal", "not", "or", "pass", "raise",
+			"return", "try", "while", "with", "yield");
 }
 
 bool PythonScriptLanguage::_is_control_flow_keyword(const String &keyword) const {
@@ -56,29 +55,26 @@ bool PythonScriptLanguage::_is_control_flow_keyword(const String &keyword) const
 
 PackedStringArray PythonScriptLanguage::_get_comment_delimiters() const {
 	return godot::helpers::append_all(PackedStringArray(),
-		"#"
-	);
+			"#");
 }
 
 PackedStringArray PythonScriptLanguage::_get_doc_comment_delimiters() const {
 	return godot::helpers::append_all(PackedStringArray(),
-		"##"
-	);
+			"##");
 }
 
 PackedStringArray PythonScriptLanguage::_get_string_delimiters() const {
 	return godot::helpers::append_all(PackedStringArray(),
-		"\" \"", "f\" \"", "r\" \"",
-		"' '", "f' '", "r' '",
-		"\"\"\" \"\"\"", "f\"\"\" \"\"\"", "r\"\"\" \"\"\"",
-		"''' '''", "f''' '''", "r''' '''"
-	);
+			"\" \"", "f\" \"", "r\" \"",
+			"' '", "f' '", "r' '",
+			"\"\"\" \"\"\"", "f\"\"\" \"\"\"", "r\"\"\" \"\"\"",
+			"''' '''", "f''' '''", "r''' '''");
 }
 
 Ref<Script> PythonScriptLanguage::_make_template(const String &_template, const String &class_name, const String &base_class_name) const {
 	Ref<PythonScript> script = memnew(PythonScript);
 	String source_code = _template.replace("_BASE_CLASS_", base_class_name)
-		.replace("_CLASS_", class_name);
+								 .replace("_CLASS_", class_name);
 	script->set_source_code(source_code);
 	return script;
 }
@@ -224,18 +220,14 @@ TypedArray<Dictionary> PythonScriptLanguage::_debug_get_current_stack_info() {
 }
 
 void PythonScriptLanguage::_reload_all_scripts() {
-
 }
 
 void PythonScriptLanguage::_reload_tool_script(const Ref<Script> &p_script, bool p_soft_reload) {
-
 }
-
 
 PackedStringArray PythonScriptLanguage::_get_recognized_extensions() const {
 	return godot::helpers::append_all(PackedStringArray(),
-		"py", "pyi"
-	);
+			"py", "pyi");
 }
 
 TypedArray<Dictionary> PythonScriptLanguage::_get_public_functions() const {
@@ -281,7 +273,7 @@ bool PythonScriptLanguage::_handles_global_class_type(const String &type) const 
 
 Dictionary PythonScriptLanguage::_get_global_class_name(const String &path) const {
 	Ref<PythonScript> script = ResourceLoader::get_singleton()->load(path);
-	
+
 	Dictionary result;
 	if (script.is_valid() && script->_is_valid()) {
 		result["name"] = script->_get_global_name();
@@ -318,4 +310,4 @@ void PythonScriptLanguage::_bind_methods() {
 
 PythonScriptLanguage *PythonScriptLanguage::instance = nullptr;
 
-}
+} //namespace pkpy
