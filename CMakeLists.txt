@@ -16,7 +16,7 @@ set(LIBNAME "godot-pocketpy" CACHE STRING "The name of the library")
 set(GODOT_PROJECT_DIR "demo" CACHE STRING "The directory of a Godot project folder")
 
 set(GODOTCPP_USE_STATIC_CPP OFF CACHE BOOL "")
-set(GODOTCPP_DEBUG_CRT OFF CACHE BOOL "")
+set(GODOTCPP_DEBUG_CRT ON CACHE BOOL "")
 
 # Make sure all the dependencies are satisfied
 find_package(Python3 3.4 REQUIRED)
@@ -85,14 +85,8 @@ target_link_libraries(${LIBNAME} PRIVATE pocketpy)
 set_target_properties(${LIBNAME}
     PROPERTIES
     # The generator expression here prevents msvc from adding a Debug or Release subdir.
-    RUNTIME_OUTPUT_DIRECTORY "$<1:${PROJECT_SOURCE_DIR}/bin/${GODOTCPP_PLATFORM}>"
+    RUNTIME_OUTPUT_DIRECTORY "$<1:${PROJECT_SOURCE_DIR}/${GODOT_PROJECT_DIR}/addons/godot-pocketpy/bin/${GODOTCPP_PLATFORM}>"
 
     PREFIX ""
     OUTPUT_NAME "${LIBNAME}${GODOTCPP_SUFFIX}"
-)
-
-set(GODOT_PROJECT_BINARY_DIR "${PROJECT_SOURCE_DIR}/${GODOT_PROJECT_DIR}/bin/${GODOTCPP_PLATFORM}")
-
-add_custom_command(TARGET ${LIBNAME} POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_FILE:${LIBNAME}>" "${GODOT_PROJECT_BINARY_DIR}/$<TARGET_FILE_NAME:${LIBNAME}>"
 )

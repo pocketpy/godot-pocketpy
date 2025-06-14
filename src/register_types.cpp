@@ -15,9 +15,12 @@ static void initialize(ModuleInitializationLevel p_level) {
 		return;
 	}
 
+	printf("==> initializing pocketpy...\n");
+
 	py_initialize();
 
-	// Python Script Language
+	printf("==> registering pocketpy classes...\n");
+
 	ClassDB::register_abstract_class<PythonScript>();
 	ClassDB::register_abstract_class<PythonScriptLanguage>();
 	PythonScriptLanguage::get_or_create_singleton();
@@ -28,7 +31,8 @@ static void uninitialize(ModuleInitializationLevel p_level) {
 		return;
 	}
 
-	py_finalize();
+	printf("==> resetting pocketpy...\n");
+	py_resetallvm();
 }
 
 extern "C" {

@@ -36,3 +36,4 @@
 build/
 __pycache__/
 *.pdb
+.vscode
