@@ -69,12 +69,12 @@ void py_newvariant(py_OutRef out, const godot::Variant *val) {
 	}
 }
 
-void py_newstring(py_OutRef out, godot::String val){
-    auto s = val.utf8();
-    c11_sv sv;
-    sv.data = s.get_data();
-    sv.size = (int)s.length();
-    py_newstrv(out, sv);
+void py_newstring(py_OutRef out, godot::String val) {
+	auto s = val.utf8();
+	c11_sv sv;
+	sv.data = s.get_data();
+	sv.size = (int)s.length();
+	py_newstrv(out, sv);
 }
 
 godot::Variant py_tovariant(py_Ref val) {
@@ -112,58 +112,111 @@ void setup_python_bindings() {
 	py_bindmethod(type, "__getitem__", [](int argc, py_Ref argv) -> bool {
 		auto self = (godot::Variant *)py_touserdata(&argv[0]);
 		godot::Variant key = py_tovariant(&argv[1]);
-		bool valid;
-		godot::Variant value = self->get_keyed(key, valid);
-		if (valid) {
+		bool r_valid;
+		godot::Variant value = self->get_keyed(key, r_valid);
+		if (r_valid) {
 			py_newvariant(py_retval(), &value);
 			return true;
 		}
-		return RuntimeError("!valid");
+		return RuntimeError("!r_valid");
 	});
 
 	py_bindmethod(type, "__setitem__", [](int argc, py_Ref argv) -> bool {
 		auto self = (godot::Variant *)py_touserdata(&argv[0]);
 		godot::Variant key = py_tovariant(&argv[1]);
 		godot::Variant value = py_tovariant(&argv[2]);
-		bool valid;
-		self->set_keyed(key, value, valid);
-		if (valid) {
+		bool r_valid;
+		self->set_keyed(key, value, r_valid);
+		if (r_valid) {
 			py_newnone(py_retval());
 			return true;
 		}
-		return RuntimeError("!valid");
+		return RuntimeError("!r_valid");
 	});
 
-	py_bindmethod(type, "__contains__", [](int argc, py_Ref argv) -> bool {
+	py_bindmethod(type, "__bool__", [](int argc, py_Ref argv) -> bool {
 		auto self = (godot::Variant *)py_touserdata(&argv[0]);
-		godot::Variant key = py_tovariant(&argv[1]);
-		bool valid;
-		bool contains = self->in(key, &valid);
-		if (valid) {
-			py_newbool(py_retval(), contains);
-			return true;
-		}
-		return RuntimeError("!valid");
+		bool res = self->booleanize();
+		py_newbool(py_retval(), res);
+		return true;
 	});
 
-    py_bindmethod(type, "__bool__", [](int argc, py_Ref argv) -> bool {
-        auto self = (godot::Variant *)py_touserdata(&argv[0]);
-        bool res = self->booleanize();
-        py_newbool(py_retval(), res);
-        return true;
-    });
+	py_bindmethod(type, "__hash__", [](int argc, py_Ref argv) -> bool {
+		auto self = (godot::Variant *)py_touserdata(&argv[0]);
+		py_newint(py_retval(), self->hash());
+		return true;
+	});
 
-    py_bindmethod(type, "__hash__", [](int argc, py_Ref argv) -> bool {
-        auto self = (godot::Variant *)py_touserdata(&argv[0]);
-        py_newint(py_retval(), self->hash());
-        return true;
-    });
+	py_bindmethod(type, "__repr__", [](int argc, py_Ref argv) -> bool {
+		auto self = (godot::Variant *)py_touserdata(&argv[0]);
+		godot::String type_name = godot::Variant::get_type_name(self->get_type());
+		godot::String r = "<godot.Variant " + type_name + ">";
+		py_newstring(py_retval(), r);
+		return true;
+	});
 
-    py_bindmethod(type, "__repr__", [](int argc, py_Ref argv) -> bool {
-        auto self = (godot::Variant *)py_touserdata(&argv[0]);
-        py_newstring(py_retval(), self->stringify());
-        return true;
-    });
+	py_bindmethod(type, "__str__", [](int argc, py_Ref argv) -> bool {
+		auto self = (godot::Variant *)py_touserdata(&argv[0]);
+		py_newstring(py_retval(), self->stringify());
+		return true;
+	});
+
+#define DEF_UNARY_OP(__name, __op)                                                    \
+	py_bindmethod(type, __name, [](int argc, py_Ref argv) -> bool {                   \
+		PY_CHECK_ARGC(1);                                                             \
+		auto self = (godot::Variant *)py_touserdata(&argv[0]);                        \
+		godot::Variant other;                                                         \
+		godot::Variant r_ret;                                                         \
+		bool r_valid;                                                                 \
+		godot::Variant::evaluate(godot::Variant::__op, *self, other, r_ret, r_valid); \
+		if (r_valid) {                                                                \
+			py_newvariant(py_retval(), &r_ret);                                       \
+			return true;                                                              \
+		}                                                                             \
+		return RuntimeError("!r_valid");                                              \
+	});
+
+#define DEF_BINARY_OP(__name, __op)                                                   \
+	py_bindmethod(type, __name, [](int argc, py_Ref argv) -> bool {                   \
+		PY_CHECK_ARGC(2);                                                             \
+		auto self = (godot::Variant *)py_touserdata(&argv[0]);                        \
+		godot::Variant other = py_tovariant(&argv[1]);                                \
+		godot::Variant r_ret;                                                         \
+		bool r_valid;                                                                 \
+		godot::Variant::evaluate(godot::Variant::__op, *self, other, r_ret, r_valid); \
+		if (r_valid) {                                                                \
+			py_newvariant(py_retval(), &r_ret);                                       \
+			return true;                                                              \
+		}                                                                             \
+		return RuntimeError("!r_valid");                                              \
+	});
+
+	DEF_BINARY_OP("__eq__", OP_EQUAL)
+	DEF_BINARY_OP("__ne__", OP_NOT_EQUAL)
+	DEF_BINARY_OP("__lt__", OP_LESS)
+	DEF_BINARY_OP("__le__", OP_LESS_EQUAL)
+	DEF_BINARY_OP("__gt__", OP_GREATER)
+	DEF_BINARY_OP("__ge__", OP_GREATER_EQUAL)
+
+	DEF_BINARY_OP("__add__", OP_ADD)
+	DEF_BINARY_OP("__sub__", OP_SUBTRACT)
+	DEF_BINARY_OP("__mul__", OP_MULTIPLY)
+	DEF_BINARY_OP("__truediv__", OP_DIVIDE)
+	DEF_BINARY_OP("__mod__", OP_MODULE)
+	DEF_BINARY_OP("__pow__", OP_POWER)
+	DEF_BINARY_OP("__lshift__", OP_SHIFT_LEFT)
+	DEF_BINARY_OP("__rshift__", OP_SHIFT_RIGHT)
+	DEF_BINARY_OP("__and__", OP_BIT_AND)
+	DEF_BINARY_OP("__or__", OP_BIT_OR)
+	DEF_BINARY_OP("__xor__", OP_BIT_XOR)
+
+	DEF_BINARY_OP("__contains__", OP_IN)
+#undef DEF_BINARY_OP
+
+	DEF_UNARY_OP("__neg__", OP_NEGATE)
+	// DEF_UNARY_OP("__pos__", OP_POSITIVE)
+	DEF_UNARY_OP("__invert__", OP_BIT_NEGATE)
+#undef DEF_UNARY_OP
 }
 
 } // namespace pkpy
