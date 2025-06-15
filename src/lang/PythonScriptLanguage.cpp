@@ -37,7 +37,6 @@ String PythonScriptLanguage::_get_extension() const {
 }
 
 void PythonScriptLanguage::_finish() {
-	py_finalize();
 }
 
 PackedStringArray PythonScriptLanguage::_get_reserved_words() const {
@@ -68,10 +67,10 @@ PackedStringArray PythonScriptLanguage::_get_doc_comment_delimiters() const {
 
 PackedStringArray PythonScriptLanguage::_get_string_delimiters() const {
 	return godot::helpers::append_all(PackedStringArray(),
-			"\" \"", "f\" \"", "r\" \"",
-			"' '", "f' '", "r' '",
-			"\"\"\" \"\"\"", "f\"\"\" \"\"\"", "r\"\"\" \"\"\"",
-			"''' '''", "f''' '''", "r''' '''");
+			"\" \"",
+			"' '",
+			"\"\"\" \"\"\"",
+			"''' '''");
 }
 
 Ref<Script> PythonScriptLanguage::_make_template(const String &_template, const String &class_name, const String &base_class_name) const {
@@ -161,15 +160,12 @@ String PythonScriptLanguage::_auto_indent_code(const String &p_code, int32_t p_f
 }
 
 void PythonScriptLanguage::_add_global_constant(const StringName &p_name, const Variant &p_value) {
-	// lua_state->get_globals()->set(p_name, p_value);
 }
 
 void PythonScriptLanguage::_add_named_global_constant(const StringName &p_name, const Variant &p_value) {
-	// lua_state->get_globals()->set(p_name, p_value);
 }
 
 void PythonScriptLanguage::_remove_named_global_constant(const StringName &p_name) {
-	// lua_state->get_globals()->set(p_name, nullptr);
 }
 
 void PythonScriptLanguage::_thread_enter() {

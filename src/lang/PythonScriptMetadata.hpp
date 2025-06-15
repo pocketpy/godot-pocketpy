@@ -23,7 +23,8 @@ struct PythonScriptMetadata {
 	// HashMap<StringName, PythonScriptSignal> signals;
 
 	void setup(py_GlobalRef module);
-	void clear();
+	PythonScriptMetadata() :
+			exposed_type(0), is_valid(false), is_tool(false) {}
 };
 
 } //namespace pkpy

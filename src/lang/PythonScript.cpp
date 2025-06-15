@@ -148,9 +148,10 @@ String PythonScript::_get_class_icon_path() const {
 }
 
 bool PythonScript::_has_method(const StringName &p_method) const {
-	String name = p_method;
-	py_Ref method = py_tpfindname(metadata.exposed_type, godot_name_to_python(p_method));
-	return py_callable(method);
+	// String name = p_method;
+	// py_Ref method = py_tpfindname(metadata.exposed_type, godot_name_to_python(p_method));
+	// return py_callable(method);
+	return false;
 }
 
 bool PythonScript::_has_static_method(const StringName &p_method) const {
