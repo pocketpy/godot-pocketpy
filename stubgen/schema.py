@@ -244,6 +244,7 @@ class BuiltinClass:
     has_destructor: bool = field(default=False)
     brief_description: str | None = field(default=None)
     description: str | None = field(default=None)
+    inherits: None = None  # 兼容
 # https://github.com/godotengine/godot/blob/1b37dacc1842779fb0d03a5b09026f59c13744fc/core/extension/extension_api_dump.cpp#L893
 # builtins
 # contains all the builtin classes    
