@@ -8,7 +8,7 @@
 #include <godot_cpp/variant/dictionary.hpp>
 #include <godot_cpp/variant/packed_string_array.hpp>
 
-#include "Common.hpp"
+#include "Bindings.hpp"
 #include "PythonScript.hpp"
 
 #include "pocketpy.h"

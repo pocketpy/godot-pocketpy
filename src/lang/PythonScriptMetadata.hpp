@@ -1,6 +1,7 @@
 #pragma once
 
 #include <godot_cpp/templates/hash_map.hpp>
+#include <godot_cpp/templates/vector.hpp>
 
 #include "pocketpy.h"
 
