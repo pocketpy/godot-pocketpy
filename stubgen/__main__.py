@@ -1,213 +1,5 @@
-# from .schema import load_extension_api, ClassesSingle, BuiltinClass, GlobalEnum
-# from keyword import iskeyword
-
-# BUILTIN_TYPES = {
-#     'None', 'int', 'float', 'bool', 'str'
-# }
-
-# class Writer:
-#     def __init__(self) -> None:
-#         self.buffer = []
-#         self.indent_level = 0
-
-#     def indent(self):
-#         self.indent_level += 1
-
-#     def dedent(self):
-#         self.indent_level -= 1
-
-#     def write(self, line: str):
-#         self.buffer.append('    ' * self.indent_level + line)
-
-#     def __str__(self) -> str:
-#         return '\n'.join(self.buffer)
-
-# def wrap_builtin_type(t: str, need_quote: bool=True):
-#     if t in BUILTIN_TYPES:
-#         return t
-#     else:
-#         t = t.replace('enum::', '')
-#         t = t.replace('.', '_')
-#         t = t.replace('bitfield::', '')  # v2 bitfield::xxx -> xxx
-#         t = 'int' if "*" in t else t  # v2 intptr -> int
-#         t = t.replace('typedarray::', 'list[') + ']' if 'typedarray::' in t else t  # v2 typedarray::xxx -> list[xxx]
-#         t = t.split(',')[0] if "," in t else t  # v2 BaseResourceClass,ResourceClass -> BaseResource
-#         return f'\'{t}\'' if need_quote else f'{t}'
-    
-# def wrap_default_value(t: str):
-#     if t == 'true':
-#         return f'True'
-#     if t == 'false':
-#         return f'False'
-#     t = t.replace('\\', '\\\\')
-#     t = t.replace('"', '\\"')
-#     if '()' in t:
-#         return f'{t}'
-#     try:
-#         return int(t)
-#     except ValueError:
-#         try:
-#             return float(t)
-#         except ValueError:        
-#             return f'\'{t}\''
-
-# def wrap_keyword(t: str):
-#     if iskeyword(t):
-#         return f'{t}_'
-#     return f'{t}'
-
-# def global_enum_to_pyi(global_enum: GlobalEnum, pyi_w: Writer) -> None:
-#     assert pyi_w.indent_level == 0
-#     pyi_w.write(f'class {wrap_builtin_type(global_enum.name, False)}:')
-#     pyi_w.indent()
-#     for e in global_enum.values:
-#         pyi_w.write(f'{e.name} = {e.value}')
-#     pyi_w.write('')
-#     pyi_w.dedent()
-    
-
-# def single_builtin_class_to_pyi(single_class: BuiltinClass, pyi_w: Writer) -> None:
-#     assert pyi_w.indent_level == 0
-#     pyi_w.write(f'class {single_class.name}:')
-#     pyi_w.indent()
-#     pyi_w.write('pass')
-#     pyi_w.write('')
-#     pyi_w.dedent()
- 
-# def single_class_to_pyi(single_class: ClassesSingle, pyi_w: Writer) -> None:
-#     assert pyi_w.indent_level == 0
-#     has_properties = False
-#     has_constants = False
-#     has_signals = False
-#     has_methods = False
-#     # class xxx:
-#     if single_class.inherits is None:
-#         pyi_w.write(f'class {single_class.name}:')
-#     else:
-#         pyi_w.write(f'class {single_class.name}({single_class.inherits}):')
-#     pyi_w.indent()
-#     # Add multi row comment
-#     description = ''
-#     if single_class.brief_description:
-#         description += single_class.brief_description
-#         description += '\t\n'
-#     if single_class.description:
-#         description += single_class.description
-#         description += '\t\n'
-#     if description:
-#         pyi_w.write(f'"""{description}')
-#         pyi_w.write(f'"""')
-#     # properties, xxx: type
-#     if single_class.properties:
-#         has_properties = True
-#         for p in single_class.properties:
-#             pyi_w.write(f'{wrap_keyword(p.name)}: {wrap_builtin_type(p.type)}')
-#     # constants, xxx = value
-#     if single_class.constants:
-#         has_constants = True
-#         for c in single_class.constants:
-#             pyi_w.write(f'{wrap_keyword(c.name)} = {c.value}')
-#         pyi_w.write('')
-#     # signals, xxx = signal()
-#     if single_class.signals:
-#         has_signals = True
-#         for s in single_class.signals:
-#             pyi_w.write(f'{wrap_keyword(s.name)} = signal()')
-#     # methods, and @staticmethod
-#     if single_class.methods:
-#         has_methods = True
-#         for m in single_class.methods:
-#             static_flag = m.is_static
-#             vararg_flag = m.is_vararg
-#             # make argument str, xx: type=val
-#             arg_list = []
-#             arg_self_str = 'self'
-#             arg_varg_str = '*arg'
-#             if m.arguments:
-#                 arg_self_str = 'self, '
-#                 arg_varg_str = ', *arg'
-#                 for arg in m.arguments:
-#                     arg_val = ''
-#                     arg_val += f'{wrap_keyword(arg.name)}: {wrap_builtin_type(arg.type)}'
-#                     if arg.default_value:
-#                         arg_val += f' = {wrap_default_value(arg.default_value)}'
-#                     arg_list.append(arg_val)
-#             arg_str = ', '.join(arg_list)
-#             # add @staticmethod
-#             if static_flag == True:
-#                 pyi_w.write(f'@staticmethod')
-#             # add 'self' for general methods
-#             else:
-#                 arg_str = arg_self_str + arg_str
-#             # add *arg
-#             if vararg_flag == True:
-#                 arg_str += arg_varg_str
-#             # special case
-#             if arg_str == 'self*arg':
-#                 arg_str = 'self, *arg'
-#             return_val = 'None'
-#             if m.return_value:
-#                 return_val = m.return_value.type
-#             pyi_w.write(f'def {wrap_keyword(m.name)}({arg_str}) -> {wrap_builtin_type(return_val)}: ...')
-#             method_description = ''
-#             if m.description:
-#                 method_description = m.description
-#                 pyi_w.indent()
-#                 pyi_w.write(f'"""{method_description}')
-#                 pyi_w.write(f'"""')
-#                 pyi_w.dedent()
-#     if (has_methods or has_constants or has_properties or has_signals) == False:
-#         pyi_w.write('pass')
-#     pyi_w.write('')
-#     pyi_w.dedent()
-#     # enums, create new class
-#     if single_class.enums:
-#         for e in single_class.enums:
-#             pyi_w.write(f'class {single_class.name}_{e.name}(Enum):')
-#             pyi_w.indent()
-#             enum_description = ''
-#             if e.description:
-#                 enum_description = e.description
-#                 pyi_w.write(f'"""{enum_description}')
-#                 pyi_w.write(f'"""')
-#             if e.values:
-#                 for value in e.values:
-#                     pyi_w.write(f'{value.name} = {value.value}')
-#             pyi_w.dedent()
-#             pyi_w.write('')
-                
-# all_in_one = load_extension_api('godot-cpp/gdextension/extension_api.json')
-# all_global_enums = all_in_one.global_enums
-# all_builtin_classes = all_in_one.builtin_classes
-# all_classes = all_in_one.classes
-
-# pyi_w = Writer()
-
-
-
-# headers = [
-#     'from enum import Enum',
-#     # 空两行
-#     "",
-#     "",
-# ]
-# pyi_w.buffer += headers
-
-# for global_enum in all_global_enums:
-#     global_enum_to_pyi(global_enum, pyi_w)
-
-# for single_builtin_class in all_builtin_classes:
-#     single_builtin_class_to_pyi(single_builtin_class, pyi_w)
-
-# for single_class in all_classes:
-#     single_class_to_pyi(single_class, pyi_w)
-
-# with open('typings/godot_class.pyi', 'w', encoding='utf-8') as fp:
-#     fp.write(str(pyi_w))
-
-
 from attr import dataclass
-from .schema import load_extension_api, ClassesSingle, BuiltinClass, GlobalEnum, builtin_class_to_classes_single
+from .schema import load_extension_api, ClassesSingle, BuiltinClass, GlobalEnum
 from keyword import iskeyword
 from .config import *
 
@@ -424,7 +216,7 @@ def wrap_value(t: str, context = []):
     return WrapValueReturnValue(result, add_None)
 
 def wrap_value(t: str, _ = []):
-    return f'default({t})'
+    return WrapValueReturnValue(f'default(\'\'\'{t}\'\'\')', False)
 
 
 def wrap_keyword(t: str):
@@ -440,86 +232,115 @@ def global_enum_to_pyi(global_enum: GlobalEnum, pyi_w: Writer) -> None:
         pyi_w.write(f'{e.name} = {e.value}')
     pyi_w.write('')
     pyi_w.dedent()
-    
 
-def builtin_class_to_pyi(single_class: BuiltinClass, pyi_w: Writer) -> None:
-    assert pyi_w.indent_level == 0
-    if single_class.name == "Variant":
-        single_class.inherits = None
+def common_class_to_pyi(
+    pyi_w: Writer,
+    name: str,
+    inherits: str | None,
+    brief_description: str | None,
+    description: str | None,
+    constants: list | None,
+    enums: list | None,
+    methods: list | None,
+    properties: list | None = None,
+    signals: list | None = None,
+    operators: list | None = None,
+    is_builtin_class: bool = False
+) -> None:
+    """
+    Common function to process both BuiltinClass and ClassesSingle with explicit parameters
     
-    # Convert BuiltinClass to ClassesSingle and use the same processing function
-    classes_single = builtin_class_to_classes_single(single_class)
-    single_class_to_pyi(classes_single, True, pyi_w)
- 
-def single_class_to_pyi(single_class: ClassesSingle, is_builtin_class: bool, pyi_w: Writer) -> None:
+    Args:
+        pyi_w: Writer instance
+        name: Class name
+        inherits: Parent class name
+        brief_description: Brief class description
+        description: Full class description
+        constants: List of constants
+        enums: List of enums
+        methods: List of methods
+        properties: List of properties (ClassesSingle only)
+        signals: List of signals (ClassesSingle only)
+        operators: List of operators (BuiltinClass only)
+        is_builtin_class: Whether this is a builtin class
+    """
     assert pyi_w.indent_level == 0
+    
     has_properties = False
     has_constants = False
     has_signals = False
     has_methods = False
     has_operators = False
-    # class xxx:
-    if single_class.inherits is None:
-        pyi_w.write(f'class {single_class.name}:')
+    
+    # Class declaration
+    if inherits is None:
+        pyi_w.write(f'class {name}:')
     else:
-        pyi_w.write(f"class {single_class.name}('{single_class.inherits}'):")
+        pyi_w.write(f"class {name}({inherits}):")
     pyi_w.indent()
-    # Add multi row comment
-    description = ''
-    if single_class.brief_description:
-        description += single_class.brief_description
-        description += '\t\n'
-    if single_class.description:
-        description += single_class.description
-        description += '\t\n'
+    
+    # Class documentation
+    doc_text = ''
+    if brief_description:
+        doc_text += brief_description
+        doc_text += '\t\n'
     if description:
-        pyi_w.write(f'"""{description}')
+        doc_text += description
+        doc_text += '\t\n'
+    if doc_text:
+        pyi_w.write(f'"""{doc_text}')
         pyi_w.write(f'"""')
-    # properties, xxx: type (ClassesSingle only)
-    if not is_builtin_class:
-        if single_class.properties:
-            has_properties = True
-            for p in single_class.properties:
-                pyi_w.write(f'{wrap_keyword(p.name)}: {wrap_builtin_type(p.type)}')
-    # constants, xxx = value
-    if single_class.constants:
+    
+    # Properties (ClassesSingle only)
+    if not is_builtin_class and properties:
+        has_properties = True
+        for p in properties:
+            pyi_w.write(f'{wrap_keyword(p.name)}: {wrap_builtin_type(p.type)}')
+    
+    # Constants
+    if constants:
         has_constants = True
-        for c in single_class.constants:
-            if isinstance(c.value, str):
-                c.value = c.value.replace('inf', "float('inf')")
-            pyi_w.write(f'{wrap_keyword(c.name)} = {wrap_value(c.value, [c]).result}')
+        for c in constants:
+            # Handle different constant value types between BuiltinClass and ClassesSingle
+            if is_builtin_class:
+                # BuiltinClass constants have string values
+                if isinstance(c.value, str):
+                    c.value = c.value.replace('inf', "float('inf')")
+                pyi_w.write(f'{wrap_keyword(c.name)} = {wrap_value(c.value, [c]).result}')
+            else:
+                # ClassesSingle constants have integer values
+                pyi_w.write(f'{wrap_keyword(c.name)} = {c.value}')
         pyi_w.write('')
-    # signals  (ClassesSingle only)
-    if not is_builtin_class:
-        if single_class.signals:
-            has_signals = True
-            for s in single_class.signals:
-                if s.arguments:
-                    args = ", ".join([f"'{arg.type}'" for arg in s.arguments])
-                    args_in_comment = ", ".join([f"{arg.name}: {wrap_builtin_type(arg.type)}" for arg in s.arguments])
-                    pyi_w.write(f'{wrap_keyword(s.name)}: Signal[Callable[[{args}], None]]  # {s.name}({args_in_comment})')
+    
+    # Signals (ClassesSingle only)
+    if not is_builtin_class and signals:
+        has_signals = True
+        for s in signals:
+            if s.arguments:
+                args = ", ".join([f"'{arg.type}'" for arg in s.arguments])
+                args_in_comment = ", ".join([f"{arg.name}: {wrap_builtin_type(arg.type)}" for arg in s.arguments])
+                pyi_w.write(f'{wrap_keyword(s.name)}: Signal[Callable[[{args}], None]]  # {s.name}({args_in_comment})')
+            else:
+                pyi_w.write(f'{wrap_keyword(s.name)}: Signal[Callable[[], None]]  # {s.name}()')
+    
+    # Operators (BuiltinClass only)
+    if is_builtin_class and operators:
+        has_operators = True
+        for o in operators:
+            if o.name in NOT_SUPPORTED_OPERATORS:
+                continue
+            if o.name in OPERATORS_TABLE:
+                if o.right_type:
+                    pyi_w.write(f'def {OPERATORS_TABLE[o.name]}(self, other: {wrap_builtin_type(o.right_type)}) -> {wrap_builtin_type(o.return_type)}: ...')
                 else:
-                    pyi_w.write(f'{wrap_keyword(s.name)}: Signal[Callable[[], None]]  # {s.name}()')
-    # operators (BuiltinClass only)
-    if is_builtin_class:
-        if single_class.operators:
-            has_operators = True
-            for o in single_class.operators:
-                if o.name in NOT_SUPPORTED_OPERATORS:
-                    continue
-                if o.name in OPERATORS_TABLE:
-                    if o.right_type:
-                        pyi_w.write(f'def {OPERATORS_TABLE[o.name]}(self, other: {wrap_builtin_type(o.right_type)}) -> {wrap_builtin_type(o.return_type)}: ...')
-                    else:
-                        pyi_w.write(f'def {OPERATORS_TABLE[o.name]}(self) -> {wrap_builtin_type(o.return_type)}: ...')
-                else:
-                    raise Exception(f'发现新的运算符: {o.name}')
-        
-        
-    # methods
-    if single_class.methods:
+                    pyi_w.write(f'def {OPERATORS_TABLE[o.name]}(self) -> {wrap_builtin_type(o.return_type)}: ...')
+            else:
+                raise Exception(f'发现新的运算符: {o.name}')
+    
+    # Methods
+    if methods:
         has_methods = True
-        for m in single_class.methods:
+        for m in methods:
             static_flag = m.is_static
             vararg_flag = m.is_vararg
             # make argument str, xx: type=val
@@ -532,12 +353,12 @@ def single_class_to_pyi(single_class: ClassesSingle, is_builtin_class: bool, pyi
                 for arg in m.arguments:
                     arg_val = ''
                     add_None = False
-                    if arg.default_value:
+                    if hasattr(arg, 'default_value') and arg.default_value:
                         default_value_dataclass = wrap_value(arg.default_value, [arg])
                         add_None = default_value_dataclass.add_None
                         default_value_str = f' = {default_value_dataclass.result}'
                     arg_val += f'{wrap_keyword(arg.name)}: {wrap_builtin_type(arg.type)}{"|None" if add_None else ""}'
-                    if arg.default_value:
+                    if hasattr(arg, 'default_value') and arg.default_value:
                         arg_val += default_value_str
                     arg_list.append(arg_val)
             arg_str = ', '.join(arg_list)
@@ -553,10 +374,17 @@ def single_class_to_pyi(single_class: ClassesSingle, is_builtin_class: bool, pyi
             # special case
             if arg_str == 'self*arg':
                 arg_str = 'self, *arg'
+            
+            # Handle return value
             return_val = 'None'
-            # if m.return_value:
-            #     return_val = m.return_value.type
+            if hasattr(m, 'return_value') and m.return_value and hasattr(m.return_value, 'type'):
+                return_val = m.return_value.type
+            elif hasattr(m, 'return_type') and m.return_type:
+                return_val = m.return_type
+                
             pyi_w.write(f'def {wrap_keyword(m.name)}({arg_str}) -> {wrap_builtin_type(return_val)}: ...')
+            
+            # Method documentation
             method_description = ''
             if m.description:
                 method_description = m.description
@@ -564,14 +392,17 @@ def single_class_to_pyi(single_class: ClassesSingle, is_builtin_class: bool, pyi
                 pyi_w.write(f'"""{method_description}')
                 pyi_w.write(f'"""')
                 pyi_w.dedent()
+    
+    # Add 'pass' if class is empty
     if (has_methods or has_constants or has_properties or has_signals or has_operators) == False:
         pyi_w.write('pass')
     pyi_w.write('')
     pyi_w.dedent()
-    # enums, create new class
-    if single_class.enums:
-        for e in single_class.enums:
-            pyi_w.write(f'class {single_class.name}_{e.name}(Enum):')
+    
+    # Enums
+    if enums:
+        for e in enums:
+            pyi_w.write(f'class {name}_{e.name}(Enum):')
             pyi_w.indent()
             enum_description = ''
             if e.description:
@@ -583,28 +414,73 @@ def single_class_to_pyi(single_class: ClassesSingle, is_builtin_class: bool, pyi
                     pyi_w.write(f'{value.name} = {value.value}')
             pyi_w.dedent()
             pyi_w.write('')
+
+def builtin_class_to_pyi(builtin_class: BuiltinClass, pyi_w: Writer) -> None:
+    """Entry function for BuiltinClass"""
+    assert pyi_w.indent_level == 0
+    
+    # Special case for Variant
+    inherits = builtin_class.inherits if hasattr(builtin_class, 'inherits') else None
+    if builtin_class.name == "Variant":
+        inherits = None
+    
+    common_class_to_pyi(
+        pyi_w=pyi_w,
+        name=builtin_class.name,
+        inherits=inherits,
+        brief_description=builtin_class.brief_description,
+        description=builtin_class.description,
+        constants=builtin_class.constants,
+        enums=builtin_class.enums,
+        methods=builtin_class.methods,
+        operators=builtin_class.operators,
+        is_builtin_class=True
+    )
+
+def single_class_to_pyi(single_class: ClassesSingle, pyi_w: Writer) -> None:
+    """Entry function for ClassesSingle"""
+    assert pyi_w.indent_level == 0
+    
+    common_class_to_pyi(
+        pyi_w=pyi_w,
+        name=single_class.name,
+        inherits=single_class.inherits,
+        brief_description=single_class.brief_description,
+        description=single_class.description,
+        constants=single_class.constants,
+        enums=single_class.enums,
+        methods=single_class.methods,
+        properties=single_class.properties,
+        signals=single_class.signals,
+        is_builtin_class=False
+    )
             
 all_in_one = load_extension_api(EXTENSION_API_PATH)
 all_global_enums = all_in_one.global_enums
 all_builtin_classes = all_in_one.builtin_classes
 all_classes = all_in_one.classes
 
+
+# ============= generate stub for dummy builtin classes in godot ============
+
 pyi_w = Writer()
 
-
-
-headers = [
+header = [
     'from enum import Enum',
-    "from typing import Callable",
-    # 空两行
+    "from typing import TypeVar, Generic",
     "",
+    "T = TypeVar('T')",
+    "",
+    "class Signal(Generic[T]): pass",
     "",
     "intptr = int",
-    "def default(comment: str): ..."
+    "def default(comment: str): ...",
     "class Variant:",
     "    pass",
+    "",
+    ""
 ]
-pyi_w.buffer += headers
+pyi_w.buffer += header
 
 for global_enum in all_global_enums:
     global_enum_to_pyi(global_enum, pyi_w)
@@ -613,8 +489,80 @@ for single_builtin_class in all_builtin_classes:
     builtin_class_to_pyi(single_builtin_class, pyi_w)
 
 for single_class in all_classes:
-    single_class_to_pyi(single_class, False, pyi_w)
+    single_class_to_pyi(single_class, pyi_w)
 
-with open(STUB_PATH, 'w', encoding='utf-8') as fp:
+with open(STUB_CLASSES_PATH, 'w', encoding='utf-8') as fp:
     fp.write(str(pyi_w))
     
+
+# ============= generate stub for exposed godot api ============
+pyi_w = Writer()
+
+header = [
+    'from typing import TypeVar, Literal, overload',
+    '',
+    'T = TypeVar("T")',
+    '',
+    '',
+    'class ExtendsHint[T]:',
+    '    @property',
+    '    def owner(self) -> T: ...',
+    '',
+]
+
+pyi_w.buffer += header
+
+
+
+# Define Extends function for each class
+def wrap_class(name: str, pyi_w: Writer):
+    pyi_w.write('@overload')
+    pyi_w.write(f'def Extends(cls: Literal[\'{name}\']) -> type[ExtendsHint[{name}]]: ...')
+
+for builtin_class in all_builtin_classes:
+    wrap_class(builtin_class.name, pyi_w)
+
+for single_class in all_classes:
+    wrap_class(single_class.name, pyi_w)
+
+
+# Define group size for splitting classes
+GROUP_SIZE = 50
+
+# Split builtin classes into groups
+builtin_class_groups = []
+for i in range(0, len(all_builtin_classes), GROUP_SIZE):
+    group = all_builtin_classes[i:i+GROUP_SIZE]
+    builtin_class_groups.append(group)
+
+# Split native classes into groups
+native_class_groups = []
+for i in range(0, len(all_classes), GROUP_SIZE):
+    group = all_classes[i:i+GROUP_SIZE]
+    native_class_groups.append(group)
+
+# Generate Literal types for each group
+for i, group in enumerate(builtin_class_groups):
+    class_list_str = ', '.join([f"'{c.name}'" for c in group])
+    pyi_w.write(f"BuiltinClassGroup{i} = Literal[{class_list_str}]")
+
+for i, group in enumerate(native_class_groups):
+    class_list_str = ', '.join([f"'{c.name}'" for c in group])
+    pyi_w.write(f"CGNativeClassGroup{i} = Literal[{class_list_str}]")
+
+# Create union types for all groups
+builtin_groups_union = ' | '.join([f"BuiltinClassGroup{i}" for i in range(len(builtin_class_groups))])
+native_groups_union = ' | '.join([f"CGNativeClassGroup{i}" for i in range(len(native_class_groups))])
+
+pyi_w.write(f"BuiltinClass = {builtin_groups_union}")
+pyi_w.write(f"CGNativeClass = {native_groups_union}")
+
+# Define export function
+pyi_w.write('@overload')
+pyi_w.write('def export(cls: BuiltinClass): ...')
+pyi_w.write('@overload')
+pyi_w.write('def Extends(cls: CGNativeClass): ...')
+
+
+with open(EXPOSED_STUB_PATH, 'w', encoding='utf-8') as fp:
+    fp.write(str(pyi_w))
