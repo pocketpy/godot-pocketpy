@@ -37,3 +37,4 @@ build/
 __pycache__/
 *.pdb
 .vscode
+typings/*.pyi
