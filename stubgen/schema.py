@@ -246,7 +246,7 @@ class BuiltinClass:
     description: str | None = field(default=None)
 # https://github.com/godotengine/godot/blob/1b37dacc1842779fb0d03a5b09026f59c13744fc/core/extension/extension_api_dump.cpp#L893
 # builtins
-# contains all the builtin classes    
+# contains all the builtin classes
 @dataclass
 class BuiltinClasses:
     builtin_classes: list[BuiltinClass] = field(default_factory=list)
@@ -718,3 +718,133 @@ def load_extension_api(path: str) -> GodotInOne:
                             singletons=result_singletons.singletons,
                             native_structures=result_native_structures.native_structures)
     return all_in_one
+
+def builtin_class_to_classes_single(builtin_class: BuiltinClass) -> ClassesSingle:
+    """
+    Convert a BuiltinClass to a ClassesSingle.
+    This is useful for treating builtin classes the same way as regular classes.
+    """
+    # Convert BuiltinClassMethod to ClassesMethod
+    methods = []
+    if builtin_class.methods:
+        for method in builtin_class.methods:
+            arguments = None
+            if method.arguments:
+                arguments = [
+                    ClassesMethodArgument(
+                        name=arg.name,
+                        type=arg.type,
+                        meta=None,
+                        default_value=arg.default_value
+                    )
+                    for arg in method.arguments
+                ]
+            
+            return_value = None
+            if method.return_type:
+                return_value = ClassesMethodReturnValue(
+                    type=method.return_type,
+                    meta=None
+                )
+            
+            methods.append(ClassesMethod(
+                name=method.name,
+                is_const=method.is_const,
+                is_vararg=method.is_vararg,
+                is_static=method.is_static,
+                is_virtual=False,  # BuiltinClass methods don't have is_virtual
+                hash=method.hash,
+                hash_compatibility=None,
+                return_value=return_value,
+                arguments=arguments,
+                description=method.description
+            ))
+    
+    # Convert BuiltinClassConstant to ClassesConstant
+    constants = None
+    if builtin_class.constants:
+        constants = []
+        for const in builtin_class.constants:
+            # Try to convert string value to int
+            value = 0
+            try:
+                if isinstance(const.value, str):
+                    if const.value.lower() == 'true':
+                        value = 1
+                    elif const.value.lower() == 'false':
+                        value = 0
+                    else:
+                        # Try to convert to int or float
+                        try:
+                            value = int(const.value)
+                        except ValueError:
+                            try:
+                                value = int(float(const.value))
+                            except ValueError:
+                                # Keep it as 0 if conversion fails
+                                pass
+                else:
+                    value = const.value
+            except:
+                # Default to 0 if any error occurs
+                pass
+                
+            constants.append(ClassesConstant(
+                name=const.name,
+                value=value,
+                description=const.description
+            ))
+    
+    # Convert BuiltinClassEnum to ClassesEnum
+    enums = None
+    if builtin_class.enums:
+        enums = []
+        for enum in builtin_class.enums:
+            enum_values = None
+            if enum.values:
+                enum_values = [
+                    ClassesEnumValue(
+                        name=value.name,
+                        value=value.value,
+                        description=value.description
+                    )
+                    for value in enum.values
+                ]
+            
+            enums.append(ClassesEnum(
+                name=enum.name,
+                is_bitfield=False,  # BuiltinClassEnum doesn't have is_bitfield
+                values=enum_values,
+                description=enum.description
+            ))
+    
+    # Create properties from members if any
+    properties = None
+    if builtin_class.members:
+        properties = [
+            ClassesProperty(
+                type=member.type,
+                name=member.name,
+                setter=None,
+                getter=None,
+                index=None,
+                description=member.description
+            )
+            for member in builtin_class.members
+        ]
+    
+    # Create ClassesSingle
+    return ClassesSingle(
+        name=builtin_class.name,
+        is_refcounted=False,  # Assume builtin classes are not refcounted
+        is_instantiable=True,  # Assume builtin classes are instantiable
+        inherits=None,  # BuiltinClass doesn't have inherits field
+        api_type="builtin",  # Mark as builtin
+        constants=constants,
+        enums=enums,
+        methods=methods,
+        signals=None,  # BuiltinClass doesn't have signals
+        properties=properties,
+        brief_description=builtin_class.brief_description,
+        description=builtin_class.description
+    )
