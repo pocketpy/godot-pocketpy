@@ -2,6 +2,7 @@
 
 #include "pocketpy.h"
 
+#include <atomic>
 #include <godot_cpp/variant/string_name.hpp>
 #include <godot_cpp/variant/variant.hpp>
 #include <thread>
@@ -18,12 +19,14 @@ struct PythonContext {
 	// internals
 	py_Type tp_ExportStatement;
 	std::thread::id main_thread_id;
+	std::atomic_flag lock;
 };
 
 struct ExportStatement {
 	int index;
 	String template_;
 	StringName name;
+	Variant default_value;
 
 	bool operator<(const ExportStatement &other) const {
 		return index < other.index;
@@ -52,5 +55,17 @@ void py_newvariant(py_OutRef out, const Variant *val);
 void py_newstring(py_OutRef out, String val);
 
 Variant py_tovariant(py_Ref val);
+
+struct PythonContextLock {
+	PythonContextLock() {
+		while (pyctx()->lock.test_and_set()) {
+			std::this_thread::yield();
+		}
+	}
+
+	~PythonContextLock() {
+		pyctx()->lock.clear();
+	}
+};
 
 } // namespace pkpy

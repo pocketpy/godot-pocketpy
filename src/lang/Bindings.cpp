@@ -9,6 +9,7 @@ namespace pkpy {
 
 static void setup_exports() {
 	pyctx()->main_thread_id = std::this_thread::get_id();
+	pyctx()->lock.clear();
 
 	// export
 	pyctx()->tp_ExportStatement = py_newtype("_ExportStatement", tp_object, pyctx()->godot, [](void *ud) {
@@ -48,11 +49,7 @@ static void setup_exports() {
 		ExportStatement *ud = (ExportStatement *)py_newobject(py_retval(), pyctx()->tp_ExportStatement, 0, sizeof(ExportStatement));
 		ud->index = ctx->next_index();
 		ud->template_ = "@export var ?: " + type_name;
-
-		if (!py_isnone(&argv[1])) {
-			Variant default_value = py_tovariant(&argv[1]);
-			ud->template_ += " = " + default_value.stringify();
-		}
+		ud->default_value = py_tovariant(&argv[1]);
 		return true;
 	});
 

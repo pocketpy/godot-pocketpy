@@ -71,10 +71,10 @@ protected:
 
 	struct {
 		Ref<GDScript> gds;
-		py_Type exposed_type;
 		StringName class_name;
 		StringName extends;
-		std::atomic<bool> is_valid;
+		HashMap<StringName, Variant> default_values;
+		bool is_valid;
 	} meta;
 
 	bool placeholder_fallback_enabled;

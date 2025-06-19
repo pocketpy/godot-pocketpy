@@ -48,15 +48,15 @@ StringName PythonScript::_get_global_name() const {
 }
 
 bool PythonScript::_inherits_script(const Ref<Script> &script) const {
-	if (!meta.is_valid)
-		return false;
-	if (const PythonScript *py_script = Object::cast_to<PythonScript>(script.ptr())) {
-		py_Type derived = meta.exposed_type;
-		py_Type base = py_script->meta.exposed_type;
-		if (!derived || !base)
-			return false;
-		return py_issubclass(derived, base);
-	}
+	// if (!meta.is_valid)
+	// 	return false;
+	// if (const PythonScript *py_script = Object::cast_to<PythonScript>(script.ptr())) {
+	// 	py_Type derived = meta.exposed_type;
+	// 	py_Type base = py_script->meta.exposed_type;
+	// 	if (!derived || !base)
+	// 		return false;
+	// 	return py_issubclass(derived, base);
+	// }
 	return false;
 }
 
@@ -92,19 +92,28 @@ String PythonScript::_get_source_code() const {
 
 void PythonScript::_set_source_code(const String &code) {
 	source_code = code;
+	_reload(true);
 }
 
 Error PythonScript::_reload(bool keep_state) {
 	(void)keep_state;
 
+	PythonContextLock lock;
+
+	printf("=> PythonScript: %p reload from %s\n", this, get_path().utf8().get_data());
+
 	std::thread::id tid = std::this_thread::get_id();
 	if (tid != pyctx()->main_thread_id) {
-		ERR_PRINT("PythonScript::_reload must be called from the main thread.");
-		return OK;
+		py_switchvm(0);
 	}
 
 	auto ctx = &PythonScriptLanguage::get_singleton()->reloading_context;
 	ctx->reset();
+
+	meta.gds.unref();
+	meta.class_name = StringName();
+	meta.extends = StringName();
+	meta.default_values.clear();
 	meta.is_valid = false;
 
 	String basename = get_path().get_file().get_basename();
@@ -164,6 +173,7 @@ Error PythonScript::_reload(bool keep_state) {
 	buffer.push_back("");
 	for (const ExportStatement &e : exports) {
 		buffer.push_back(e.template_.replace("?", e.name));
+		meta.default_values[e.name] = e.default_value;
 	}
 
 	Ref<GDScript> gds = memnew(GDScript);
@@ -176,7 +186,6 @@ Error PythonScript::_reload(bool keep_state) {
 		return ERR_COMPILATION_FAILED;
 	}
 
-	meta.exposed_type = py_totype(exposed_class);
 	meta.class_name = ctx->class_name;
 	meta.extends = ctx->extends;
 
@@ -194,9 +203,6 @@ String PythonScript::_get_class_icon_path() const {
 }
 
 bool PythonScript::_has_method(const StringName &p_method) const {
-	// String name = p_method;
-	// py_Ref method = py_tpfindname(metadata.exposed_type, godot_name_to_python(p_method));
-	// return py_callable(method);
 	return false;
 }
 
@@ -240,12 +246,14 @@ TypedArray<Dictionary> PythonScript::_get_script_signal_list() const {
 }
 
 bool PythonScript::_has_property_default_value(const StringName &p_property) const {
-	Variant v = meta.gds->get_property_default_value(p_property);
-	return v.get_type() != Variant::NIL;
+	return meta.default_values.has(p_property);
 }
 
 Variant PythonScript::_get_property_default_value(const StringName &p_property) const {
-	return meta.gds->get_property_default_value(p_property);
+	if (meta.default_values.has(p_property)) {
+		return meta.default_values[p_property];
+	}
+	return Variant();
 }
 
 void PythonScript::_update_exports() {
@@ -313,9 +321,29 @@ String PythonScript::_to_string() const {
 	return String("[%s:%d]") % Array::make(get_class_static(), get_instance_id());
 }
 
+static Variant construct_default_variant(Variant::Type type) {
+	Variant result;
+	GDExtensionCallError error;
+	internal::gdextension_interface_variant_construct((GDExtensionVariantType)type, &result, nullptr, 0, &error);
+	ERR_FAIL_COND_V_MSG(error.error != GDEXTENSION_CALL_OK, Variant(), "Error constructing " + Variant::get_type_name(type));
+	return result;
+}
+
 void PythonScript::_update_placeholder_exports(void *placeholder) const {
 	Array properties;
 	Dictionary default_values;
+	TypedArray<Dictionary> raw_properties = _get_script_property_list();
+	for (int i = 0; i < raw_properties.size(); i++) {
+		properties.append(raw_properties[i]);
+		StringName name = raw_properties[i].get("name");
+		int type = raw_properties[i].get("type");
+		Variant val = _get_property_default_value(name);
+		if (val.get_type() == type) {
+			default_values[name] = val.duplicate();
+		} else {
+			default_values[name] = construct_default_variant((Variant::Type)type);
+		}
+	}
 	godot::internal::gdextension_interface_placeholder_script_instance_update(placeholder, properties._native_ptr(), default_values._native_ptr());
 }
 
