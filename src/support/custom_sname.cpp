@@ -71,16 +71,13 @@ py_Name py_namev(c11_sv name) {
 	} else {
 		sn = it->value;
 	}
-	void *ptr = sn._native_ptr();
-	py_Name retval;
-	memcpy(&retval, ptr, sizeof(py_Name));
+	const py_Name &retval = (const py_Name &)sn;
 	return retval;
 }
 
 c11_sv py_name2sv(py_Name index) {
 	CachedNamesLock lock;
-	StringName sn;
-	memcpy(&sn, &index, sizeof(py_Name));
+	const StringName &sn = (const StringName &)(index);
 	auto it = cached_names->map.find(index);
 	if (it == cached_names->map.end()) {
 		CharString cs = String(sn).utf8();

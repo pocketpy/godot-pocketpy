@@ -1,20 +1,12 @@
 [gd_scene load_steps=3 format=3 uid="uid://tudbnvddbxp6"]
 
 [ext_resource type="Script" uid="uid://dof0ku5rrw77i" path="res://new_script.gd" id="1_ig7tw"]
-
-[sub_resource type="GDScript" id="GDScript_ig7tw"]
-resource_name = "a"
-script/source = "extends Node
-
-func _ready() -> void:
-	var n = $\"..\"
-	n.auto_translate_mode = 1
-"
+[ext_resource type="Script" uid="uid://drm3k4ac6d87p" path="res://MyScript.py" id="2_0xm2m"]
 
 [node name="root" type="Node2D"]
 script = ExtResource("1_ig7tw")
 
-[node name="Node" type="Node" parent="."]
-script = SubResource("GDScript_ig7tw")
+[node name="gds_node" type="Node" parent="."]
 
-[connection signal="ready" from="Node" to="." method="_on_node_ready2"]
+[node name="py_node" type="Node" parent="."]
+script = ExtResource("2_0xm2m")

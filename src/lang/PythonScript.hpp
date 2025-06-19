@@ -8,6 +8,8 @@
 #include "PythonScriptLanguage.hpp"
 #include "pocketpy.h"
 
+#include <atomic>
+
 using namespace godot;
 
 namespace pkpy {
@@ -72,7 +74,7 @@ protected:
 		py_Type exposed_type;
 		StringName class_name;
 		StringName extends;
-		bool is_valid;
+		std::atomic<bool> is_valid;
 	} meta;
 
 	bool placeholder_fallback_enabled;

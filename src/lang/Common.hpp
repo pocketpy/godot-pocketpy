@@ -4,6 +4,7 @@
 
 #include <godot_cpp/variant/string_name.hpp>
 #include <godot_cpp/variant/variant.hpp>
+#include <thread>
 
 using namespace godot;
 
@@ -16,6 +17,7 @@ struct PythonContext {
 	py_Type tp_Variant;
 	// internals
 	py_Type tp_ExportStatement;
+	std::thread::id main_thread_id;
 };
 
 struct ExportStatement {
@@ -31,15 +33,13 @@ struct ExportStatement {
 PythonContext *pyctx();
 
 inline py_Name godot_name_to_python(StringName name) {
-	py_Name retval;
-	memcpy(&retval, &name, sizeof(py_Name));
+	const py_Name &retval = (const py_Name &)name;
 	return retval;
 }
 
 inline StringName python_name_to_godot(py_Name name) {
-	StringName retval;
-	memcpy(&retval, &name, sizeof(StringName));
-	return retval;
+	const StringName &sn = (const StringName &)name;
+	return sn;
 }
 
 inline void raise_python_error() {

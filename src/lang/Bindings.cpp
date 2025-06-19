@@ -8,6 +8,8 @@
 namespace pkpy {
 
 static void setup_exports() {
+	pyctx()->main_thread_id = std::this_thread::get_id();
+
 	// export
 	pyctx()->tp_ExportStatement = py_newtype("_ExportStatement", tp_object, pyctx()->godot, [](void *ud) {
 		ExportStatement *self = (ExportStatement *)ud;

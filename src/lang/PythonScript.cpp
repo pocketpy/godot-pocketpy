@@ -12,6 +12,7 @@
 #include "godot_cpp/godot.hpp"
 
 #include <stdlib.h>
+#include <thread>
 
 namespace pkpy {
 
@@ -41,6 +42,8 @@ Ref<Script> PythonScript::_get_base_script() const {
 }
 
 StringName PythonScript::_get_global_name() const {
+	if (!meta.is_valid)
+		return StringName();
 	return meta.class_name;
 }
 
@@ -58,6 +61,8 @@ bool PythonScript::_inherits_script(const Ref<Script> &script) const {
 }
 
 StringName PythonScript::_get_instance_base_type() const {
+	if (!meta.is_valid)
+		return StringName();
 	return meta.extends;
 }
 
@@ -92,6 +97,12 @@ void PythonScript::_set_source_code(const String &code) {
 Error PythonScript::_reload(bool keep_state) {
 	(void)keep_state;
 
+	std::thread::id tid = std::this_thread::get_id();
+	if (tid != pyctx()->main_thread_id) {
+		ERR_PRINT("PythonScript::_reload must be called from the main thread.");
+		return OK;
+	}
+
 	auto ctx = &PythonScriptLanguage::get_singleton()->reloading_context;
 	ctx->reset();
 	meta.is_valid = false;
@@ -106,14 +117,10 @@ Error PythonScript::_reload(bool keep_state) {
 	String module_path = "godot.scripts." + basename;
 	auto module_path_cstr = module_path.utf8();
 
-	printf("2: %s\n", module_path_cstr.get_data());
 	py_GlobalRef module = py_getmodule(module_path_cstr);
-	printf("3\n");
 	if (module == NULL) {
-		printf("4\n");
 		module = py_newmodule(module_path_cstr);
 	}
-	printf("5\n");
 
 	// NOTE: old variables still exist if not overwritten
 	bool ok = py_exec(source_code.utf8().get_data(), path_cstr, EXEC_MODE, module);
@@ -253,7 +260,11 @@ TypedArray<Dictionary> PythonScript::_get_script_method_list() const {
 }
 
 TypedArray<Dictionary> PythonScript::_get_script_property_list() const {
-	return meta.gds->get_script_property_list();
+	auto retval = meta.gds->get_script_property_list();
+	if (!retval.is_empty() && retval[0].get("type") == Variant(0)) {
+		retval.remove_at(0);
+	}
+	return retval;
 }
 
 int32_t PythonScript::_get_member_line(const StringName &p_member) const {
@@ -266,6 +277,10 @@ Dictionary PythonScript::_get_constants() const {
 
 TypedArray<StringName> PythonScript::_get_members() const {
 	TypedArray<StringName> members;
+	TypedArray<Dictionary> properties = get_property_list();
+	for (int i = 0; i < properties.size(); i++) {
+		members.push_back(properties[i].get("name"));
+	}
 	return members;
 }
 
