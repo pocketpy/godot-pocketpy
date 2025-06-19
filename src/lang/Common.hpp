@@ -13,8 +13,19 @@ struct PythonContext {
 	py_GlobalRef godot;
 	py_Type tp_Script;
 	py_Type tp_NativeClass;
-	py_Type tp_ExtendsType;
 	py_Type tp_Variant;
+	// internals
+	py_Type tp_ExportStatement;
+};
+
+struct ExportStatement {
+	int index;
+	String template_;
+	StringName name;
+
+	bool operator<(const ExportStatement &other) const {
+		return index < other.index;
+	}
 };
 
 PythonContext *pyctx();

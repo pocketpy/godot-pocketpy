@@ -2,28 +2,72 @@
 #include "PythonScriptInstance.hpp"
 #include "PythonScriptLanguage.hpp"
 
+#include <godot_cpp/classes/node.hpp>
 #include <godot_cpp/core/defs.hpp>
 
 namespace pkpy {
 
-void setup_python_bindings() {
-	py_GlobalRef mod = pyctx()->godot = py_newmodule("godot");
-
+static void setup_exports() {
 	// export
-	py_bindfunc(mod, "exposed", [](int argc, py_Ref argv) -> bool {
-		PY_CHECK_ARGC(1);
-		PY_CHECK_ARG_TYPE(0, tp_type);
-		py_setdict(argv, py_name("__exposed__"), py_True());
+	pyctx()->tp_ExportStatement = py_newtype("_ExportStatement", tp_object, pyctx()->godot, [](void *ud) {
+		ExportStatement *self = (ExportStatement *)ud;
+		self->~ExportStatement();
+	});
+
+	py_bind(pyctx()->godot, "export(cls, default=None)", [](int argc, py_Ref argv) -> bool {
+		auto ctx = &PythonScriptLanguage::get_singleton()->reloading_context;
+		StringName type_name;
+
+		if (py_istype(&argv[0], tp_type)) {
+			py_Type type = py_totype(&argv[0]);
+			switch (type) {
+				case tp_int:
+					type_name = "int";
+					break;
+				case tp_float:
+					type_name = "float";
+					break;
+				case tp_bool:
+					type_name = "bool";
+					break;
+				case tp_str:
+					type_name = "String";
+					break;
+				default:
+					return TypeError("cannot export type '%t'", type);
+			}
+		} else if (py_istype(&argv[0], pyctx()->tp_NativeClass)) {
+			PY_CHECK_ARG_TYPE(0, pyctx()->tp_NativeClass);
+			type_name = *(StringName *)py_touserdata(&argv[0]);
+		} else {
+			return TypeError("expected 'type' or 'GDNativeClass', got '%t'", py_typeof(&argv[0]));
+		}
+
+		ExportStatement *ud = (ExportStatement *)py_newobject(py_retval(), pyctx()->tp_ExportStatement, 0, sizeof(ExportStatement));
+		ud->index = ctx->next_index();
+		ud->template_ = "@export var ?: " + type_name;
+
+		if (!py_isnone(&argv[1])) {
+			Variant default_value = py_tovariant(&argv[1]);
+			ud->template_ += " = " + default_value.stringify();
+		}
 		return true;
 	});
 
-	py_bind(mod, "export(cls, default=None)", [](int argc, py_Ref argv) -> bool {
-        auto ctx = &PythonScriptLanguage::get_singleton()->reloading_context;
-		return true;
-	});
+	// py_bind(pyctx()->godot, "export_range(min, max, step, *extra_hints, default=None)", [](int argc, py_Ref argv) -> bool {
+	// 	auto ctx = &PythonScriptLanguage::get_singleton()->reloading_context;
+	// 	ExportStatement* ud = (ExportStatement *)py_newobject(py_retval(), pyctx()->tp_ExportStatement, 0, sizeof(ExportStatement));
+	// 	ud->index = ctx->next_index();
+	// 	ud->template_ = "@export_range() var ?";
+	// 	return true;
+	// });
+}
 
-    // Script
-	pyctx()->tp_Script = py_newtype("PythonScriptInstance", tp_object, mod, [](void *ud) {
+void setup_python_bindings() {
+	py_GlobalRef godot = pyctx()->godot = py_newmodule("godot");
+
+	// Script
+	pyctx()->tp_Script = py_newtype("PythonScriptInstance", tp_object, godot, [](void *ud) {
 		auto *self = (PythonScriptInstance *)ud;
 		self->~PythonScriptInstance();
 	});
@@ -37,34 +81,30 @@ void setup_python_bindings() {
 			},
 			NULL);
 
-    // _NativeClass
-    pyctx()->tp_NativeClass = py_newtype("_NativeClass", tp_object, mod, [](void *ud) {
-        auto *self = (StringName *)ud;
-        self->~StringName();
-    });
+	// GDNativeClass
+	pyctx()->tp_NativeClass = py_newtype("GDNativeClass", tp_object, godot, [](void *ud) {
+		auto *self = (StringName *)ud;
+		self->~StringName();
+	});
 
-    py_Ref tmp = py_pushtmp();
-    StringName* ud = (StringName*)py_newobject(tmp, pyctx()->tp_NativeClass, 0, sizeof(StringName));
-    new (ud) StringName("Node");
-    py_setdict(mod, py_name("Node"), tmp);
-    py_pop();
+	py_Ref tmp = py_pushtmp();
+	StringName *ud = (StringName *)py_newobject(tmp, pyctx()->tp_NativeClass, 0, sizeof(StringName));
+	new (ud) StringName("Node");
+	py_setdict(godot, py_name("Node"), tmp);
+	py_pop();
 
-	// Extends[T]
-	pyctx()->tp_ExtendsType = py_newtype("_ExtendsType", tp_object, mod, NULL);
-	py_newobject(
-			py_emplacedict(mod, py_name("Extends")),
-			pyctx()->tp_ExtendsType,
-			0, 0);
-
-	py_bindmethod(pyctx()->tp_ExtendsType, "__getitem__", [](int argc, py_Ref argv) -> bool {
-		PY_CHECK_ARGC(2);
-		PY_CHECK_ARG_TYPE(1, pyctx()->tp_NativeClass);
-        StringName* nativeClass = (StringName *)py_touserdata(&argv[1]);
-        auto ctx = &PythonScriptLanguage::get_singleton()->reloading_context;
-        ctx->extends = *nativeClass;
+	// Extends
+	py_bindfunc(godot, "Extends", [](int argc, py_Ref argv) -> bool {
+		auto ctx = &PythonScriptLanguage::get_singleton()->reloading_context;
+		PY_CHECK_ARGC(1);
+		PY_CHECK_ARG_TYPE(0, pyctx()->tp_NativeClass);
+		StringName nativeClass = *(StringName *)py_touserdata(&argv[0]);
+		ctx->extends = nativeClass;
 		py_assign(py_retval(), py_tpobject(pyctx()->tp_Script));
 		return true;
 	});
+
+	setup_exports();
 
 	// Variant
 	py_Type type = pyctx()->tp_Variant = py_newtype("Variant", tp_object, pyctx()->godot, [](void *ud) {

@@ -1,11 +1,11 @@
 #pragma once
 
+#include "godot_cpp/classes/gd_script.hpp"
 #include <godot_cpp/classes/script_extension.hpp>
 #include <godot_cpp/templates/hash_map.hpp>
 #include <godot_cpp/templates/hash_set.hpp>
 
 #include "PythonScriptLanguage.hpp"
-#include "PythonScriptMetadata.hpp"
 #include "pocketpy.h"
 
 using namespace godot;
@@ -58,7 +58,6 @@ public:
 
 	// Script methods
 	Variant _new(const Variant **args, GDExtensionInt arg_count, GDExtensionCallError &error);
-	const PythonScriptMetadata &get_metadata() const;
 
 protected:
 	static void _bind_methods();
@@ -67,7 +66,14 @@ protected:
 	void _update_placeholder_exports(void *placeholder) const;
 
 	String source_code;
-	PythonScriptMetadata metadata;
+
+	struct {
+		Ref<GDScript> gds;
+		py_Type exposed_type;
+		StringName class_name;
+		StringName extends;
+		bool is_valid;
+	} meta;
 
 	bool placeholder_fallback_enabled;
 

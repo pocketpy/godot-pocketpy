@@ -41,13 +41,15 @@ Ref<Script> PythonScript::_get_base_script() const {
 }
 
 StringName PythonScript::_get_global_name() const {
-	return metadata.class_name;
+	return meta.class_name;
 }
 
 bool PythonScript::_inherits_script(const Ref<Script> &script) const {
+	if (!meta.is_valid)
+		return false;
 	if (const PythonScript *py_script = Object::cast_to<PythonScript>(script.ptr())) {
-		py_Type derived = metadata.exposed_type;
-		py_Type base = py_script->metadata.exposed_type;
+		py_Type derived = meta.exposed_type;
+		py_Type base = py_script->meta.exposed_type;
 		if (!derived || !base)
 			return false;
 		return py_issubclass(derived, base);
@@ -56,8 +58,7 @@ bool PythonScript::_inherits_script(const Ref<Script> &script) const {
 }
 
 StringName PythonScript::_get_instance_base_type() const {
-	// must return a godot native object
-	return metadata.extends;
+	return meta.extends;
 }
 
 void *PythonScript::_instance_create(Object *for_object) const {
@@ -86,65 +87,103 @@ String PythonScript::_get_source_code() const {
 
 void PythonScript::_set_source_code(const String &code) {
 	source_code = code;
-	_reload(true);
 }
 
 Error PythonScript::_reload(bool keep_state) {
-	long long rid = get_rid().get_id();
-	if (rid == 0) {
+	(void)keep_state;
+
+	auto ctx = &PythonScriptLanguage::get_singleton()->reloading_context;
+	ctx->reset();
+	meta.is_valid = false;
+
+	String basename = get_path().get_file().get_basename();
+	if (basename.is_empty() || !has_source_code()) {
 		return OK;
 	}
-	char filename[128];
-	snprintf(filename, sizeof(filename), "%lld", rid);
-	printf("==> reloading python script: %s\n", filename);
-	const char *module_path = filename;
-	py_GlobalRef module = py_getmodule(module_path);
+	auto path_cstr = get_path().utf8();
+
+	printf("==> reloading python script: %s\n", path_cstr.get_data());
+	String module_path = "godot.scripts." + basename;
+	auto module_path_cstr = module_path.utf8();
+
+	printf("2: %s\n", module_path_cstr.get_data());
+	py_GlobalRef module = py_getmodule(module_path_cstr);
+	printf("3\n");
 	if (module == NULL) {
-		module = py_newmodule(module_path);
+		printf("4\n");
+		module = py_newmodule(module_path_cstr);
 	}
+	printf("5\n");
+
 	// NOTE: old variables still exist if not overwritten
-	bool ok = py_exec(source_code.utf8().get_data(), filename, EXEC_MODE, module);
+	bool ok = py_exec(source_code.utf8().get_data(), path_cstr, EXEC_MODE, module);
 	if (!ok) {
 		raise_python_error();
 		return ERR_COMPILATION_FAILED;
 	}
 
-	ok = py_applydict(
-			module, [](py_Name name, py_Ref val, void *ctx) -> bool {
-				PythonScriptMetadata *metadata = static_cast<PythonScriptMetadata *>(ctx);
-				const char *name_cstr = py_name2str(name);
-				if (py_istype(val, tp_type)) {
-					py_Type type = py_totype(val);
-					// @exposed will set `__exposed__` flag
-					bool is_exposed = py_getdict(py_tpobject(type), py_name("__exposed__"));
-					if (is_exposed) {
-						// setup metadata
-						metadata->exposed_type = type;
+	ctx->class_name = StringName(basename);
+	py_Name class_name = godot_name_to_python(ctx->class_name);
+	py_ItemRef exposed_class = py_getdict(module, class_name);
+	if (!exposed_class || !py_istype(exposed_class, tp_type)) {
+		ERR_PRINT("Failed to find class '" + ctx->class_name + "' in " + get_path());
+		return ERR_COMPILATION_FAILED;
+	}
 
-						while (type) {
-							py_GlobalRef typeobject = py_tpobject(type);
-							int attrs_length;
-							py_Name *attrs = py_tpclassattrs(type, &attrs_length);
-							for (int i = 0; i < attrs_length; ++i) {
-								py_Name name = attrs[i];
-								py_ItemRef val = py_getdict(typeobject, name);
-							}
-							type = py_tpbase(type);
-						}
-					}
+	Vector<ExportStatement> exports;
+
+	ok = py_applydict(
+			exposed_class, [](py_Name name, py_ItemRef value, void *ctx) -> bool {
+				Vector<ExportStatement> *exports = (Vector<ExportStatement> *)ctx;
+				if (py_istype(value, pyctx()->tp_ExportStatement)) {
+					ExportStatement *e = (ExportStatement *)py_touserdata(value);
+					e->name = python_name_to_godot(name);
+					exports->push_back(*e);
 				}
 				return true;
 			},
-			&metadata);
-	return ok ? OK : ERR_COMPILATION_FAILED;
+			&exports);
+
+	if (!ok) {
+		raise_python_error();
+		return ERR_COMPILATION_FAILED;
+	}
+
+	exports.sort();
+
+	PackedStringArray buffer;
+	buffer.push_back("# " + get_path());
+	buffer.push_back("extends " + ctx->extends);
+	buffer.push_back("");
+	for (const ExportStatement &e : exports) {
+		buffer.push_back(e.template_.replace("?", e.name));
+	}
+
+	Ref<GDScript> gds = memnew(GDScript);
+	meta.gds = gds;
+	meta.gds->set_source_code(String("\n").join(buffer));
+	Error err = meta.gds->reload(false);
+	if (err != OK) {
+		// printf("%s\n", meta.gds->get_source_code().utf8().get_data());
+		ERR_PRINT("Failed to compile GDScript: " + itos(err));
+		return ERR_COMPILATION_FAILED;
+	}
+
+	meta.exposed_type = py_totype(exposed_class);
+	meta.class_name = ctx->class_name;
+	meta.extends = ctx->extends;
+
+	meta.is_valid = true;
+	return OK;
 }
 
 TypedArray<Dictionary> PythonScript::_get_documentation() const {
+	// get doc from exposed class
 	return {};
 }
 
 String PythonScript::_get_class_icon_path() const {
-	return metadata.icon_path;
+	return String();
 }
 
 bool PythonScript::_has_method(const StringName &p_method) const {
@@ -167,11 +206,13 @@ Dictionary PythonScript::_get_method_info(const StringName &p_method) const {
 }
 
 bool PythonScript::_is_tool() const {
-	return metadata.is_tool;
+	if (!meta.is_valid)
+		return false;
+	return meta.gds->is_tool();
 }
 
 bool PythonScript::_is_valid() const {
-	return metadata.is_valid;
+	return meta.is_valid;
 }
 
 bool PythonScript::_is_abstract() const {
@@ -192,11 +233,12 @@ TypedArray<Dictionary> PythonScript::_get_script_signal_list() const {
 }
 
 bool PythonScript::_has_property_default_value(const StringName &p_property) const {
-	return false;
+	Variant v = meta.gds->get_property_default_value(p_property);
+	return v.get_type() != Variant::NIL;
 }
 
 Variant PythonScript::_get_property_default_value(const StringName &p_property) const {
-	return {};
+	return meta.gds->get_property_default_value(p_property);
 }
 
 void PythonScript::_update_exports() {
@@ -211,8 +253,7 @@ TypedArray<Dictionary> PythonScript::_get_script_method_list() const {
 }
 
 TypedArray<Dictionary> PythonScript::_get_script_property_list() const {
-	TypedArray<Dictionary> list;
-	return list;
+	return meta.gds->get_script_property_list();
 }
 
 int32_t PythonScript::_get_member_line(const StringName &p_member) const {
@@ -247,10 +288,6 @@ Variant PythonScript::_new(const Variant **args, GDExtensionInt arg_count, GDExt
 		obj->set_script(this);
 	}
 	return object;
-}
-
-const PythonScriptMetadata &PythonScript::get_metadata() const {
-	return metadata;
 }
 
 void PythonScript::_bind_methods() {

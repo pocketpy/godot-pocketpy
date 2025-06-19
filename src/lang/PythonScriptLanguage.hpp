@@ -8,8 +8,22 @@ using namespace godot;
 namespace pkpy {
 
 struct PythonScriptReloadingContext {
-	Vector<String> buffer;
+	StringName class_name;
 	StringName extends;
+	int counter;
+
+	PythonScriptReloadingContext() :
+			class_name(), extends(), counter(0) {}
+
+	inline void reset() {
+		class_name = StringName();
+		extends = StringName();
+		counter = 0;
+	}
+
+	inline int next_index() {
+		return counter++;
+	}
 };
 
 class PythonScriptLanguage : public ScriptLanguageExtension {

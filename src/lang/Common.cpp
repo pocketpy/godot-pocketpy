@@ -80,7 +80,7 @@ void py_newstring(py_OutRef out, String val) {
 Variant py_tovariant(py_Ref val) {
 	switch (py_typeof(val)) {
 		case tp_NoneType:
-			return {};
+			return Variant();
 		case tp_bool:
 			return py_tobool(val);
 		case tp_int:

@@ -17,26 +17,15 @@ set(GODOT_PROJECT_DIR "demo" CACHE STRING "The directory of a Godot project fold
 
 set(GODOTCPP_USE_STATIC_CPP OFF CACHE BOOL "")
 set(GODOTCPP_DEBUG_CRT ON CACHE BOOL "")
+set(GODOTCPP_DEV_BUILD ON CACHE BOOL "")
 
-# Make sure all the dependencies are satisfied
 find_package(Python3 3.4 REQUIRED)
-find_program(GIT git REQUIRED)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_C_STANDARD 11)
+set(CMAKE_C_STANDARD_REQUIRED ON)
 
-# Ensure godot-cpp submodule has been updated
-if(NOT EXISTS "${CMAKE_CURRENT_LIST_DIR}/godot-cpp/src")
-    message(NOTICE "godot-cpp bindings source not found")
-    message(NOTICE "initializing/updating the godot-cpp submodule...")
-
-    # update the c++ bindings submodule to populate it with the necessary source for the library
-    execute_process(
-        COMMAND git submodule update --init godot-cpp
-        WORKING_DIRECTORY ${CMAKE_CURRENT_LIST_DIR}
-        COMMAND_ERROR_IS_FATAL ANY
-    )
-endif()
 add_subdirectory(godot-cpp SYSTEM)
 
 # Add godot-cpp's module path and include the exported functions.
