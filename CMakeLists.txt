@@ -17,7 +17,6 @@ set(GODOT_PROJECT_DIR "demo" CACHE STRING "The directory of a Godot project fold
 
 set(GODOTCPP_USE_STATIC_CPP OFF CACHE BOOL "")
 set(GODOTCPP_DEBUG_CRT ON CACHE BOOL "")
-set(GODOTCPP_DEV_BUILD ON CACHE BOOL "")
 
 find_package(Python3 3.4 REQUIRED)
 
