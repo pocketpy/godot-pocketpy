@@ -65,10 +65,11 @@ inline StringName python_name_to_godot(py_Name name) {
 	return sn;
 }
 
-inline void raise_python_error() {
+inline void log_python_error_and_clearexc(py_StackRef p0) {
 	char *msg = py_formatexc();
 	ERR_PRINT(msg);
 	PK_FREE(msg);
+	py_clearexc(p0);
 }
 
 void py_newvariant(py_OutRef out, const Variant *val);

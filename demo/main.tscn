@@ -11,4 +11,3 @@ c = 50
 
 [node name="py_node" type="Node" parent="."]
 script = ExtResource("2_0xm2m")
-z = 2.0

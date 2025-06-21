@@ -20,12 +20,15 @@ PythonScriptInstance::~PythonScriptInstance() {
 GDExtensionBool set_func(PythonScriptInstance *p_instance, const StringName *p_name, const Variant *p_value) {
 	bool is_defined = false;
 	if (is_defined) {
+		py_StackRef p0 = py_peek(0);
 		py_StackRef tmp = py_pushtmp();
 		py_newvariant(tmp, p_value);
 		bool ok = py_setattr(&p_instance->py, godot_name_to_python(*p_name), tmp);
-		if (!ok)
-			raise_python_error();
-		py_pop();
+		if (ok) {
+			py_pop();
+		} else {
+			log_python_error_and_clearexc(p0);
+		}
 		return true;
 	} else {
 		return false;
@@ -35,10 +38,14 @@ GDExtensionBool set_func(PythonScriptInstance *p_instance, const StringName *p_n
 GDExtensionBool get_func(PythonScriptInstance *p_instance, const StringName *p_name, Variant *p_value) {
 	bool is_defined = false;
 	if (is_defined) {
+		py_StackRef p0 = py_peek(0);
 		bool ok = py_getattr(&p_instance->py, godot_name_to_python(*p_name));
-		if (!ok)
-			raise_python_error();
-		*p_value = py_tovariant(py_retval());
+		if (ok) {
+			*p_value = py_tovariant(py_retval());
+		} else {
+			log_python_error_and_clearexc(p0);
+			*p_value = Variant();
+		}
 		return true;
 	} else {
 		return false;
@@ -112,9 +119,8 @@ void call_func(PythonScriptInstance *p_instance, const StringName *p_method, con
 		*r_return = py_tovariant(py_retval());
 		r_error->error = GDEXTENSION_CALL_OK;
 	} else {
-		raise_python_error();
+		log_python_error_and_clearexc(p0);
 		r_error->error = GDEXTENSION_CALL_ERROR_INVALID_METHOD;
-		py_clearexc(p0);
 	}
 }
 
@@ -131,8 +137,7 @@ void to_string_func(PythonScriptInstance *p_instance, GDExtensionBool *r_is_vali
 	} else {
 		*r_is_valid = false;
 		*r_out = String();
-		raise_python_error();
-		py_clearexc(p0);
+		log_python_error_and_clearexc(p0);
 	}
 }
 

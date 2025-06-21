@@ -121,9 +121,10 @@ Error PythonScript::_reload(bool keep_state) {
 	}
 
 	// NOTE: old variables still exist if not overwritten
+	py_StackRef p0 = py_peek(0);
 	bool ok = py_exec(source_code.utf8().get_data(), path_cstr, EXEC_MODE, module);
 	if (!ok) {
-		raise_python_error();
+		log_python_error_and_clearexc(p0);
 		return ERR_COMPILATION_FAILED;
 	}
 
@@ -137,7 +138,7 @@ Error PythonScript::_reload(bool keep_state) {
 
 	Vector<ExportStatement> exports;
 
-	ok = py_applydict(
+	py_applydict(
 			exposed_class, [](py_Name name, py_ItemRef value, void *ctx) -> bool {
 				Vector<ExportStatement> *exports = (Vector<ExportStatement> *)ctx;
 				if (py_istype(value, pyctx()->tp_ExportStatement)) {
@@ -148,11 +149,6 @@ Error PythonScript::_reload(bool keep_state) {
 				return true;
 			},
 			&exports);
-
-	if (!ok) {
-		raise_python_error();
-		return ERR_COMPILATION_FAILED;
-	}
 
 	exports.sort();
 
@@ -324,11 +320,19 @@ void PythonScript::_update_placeholder_exports(void *placeholder) const {
 		StringName name = raw_properties[i].get("name");
 		int type = raw_properties[i].get("type");
 		Variant val = _get_property_default_value(name);
+
 		if (val.get_type() == type) {
 			default_values[name] = val.duplicate();
-		} else {
-			default_values[name] = construct_default_variant((Variant::Type)type);
+			continue;
 		}
+
+		if (val.get_type() == Variant::NIL) {
+			default_values[name] = Variant();
+			continue;
+		}
+
+		WARN_PRINT("Property '" + name + "' has type " + Variant::get_type_name((Variant::Type)type) + ", but its default value is " + Variant::get_type_name(val.get_type()));
+		default_values[name] = construct_default_variant((Variant::Type)type);
 	}
 	godot::internal::gdextension_interface_placeholder_script_instance_update(placeholder, properties._native_ptr(), default_values._native_ptr());
 }
