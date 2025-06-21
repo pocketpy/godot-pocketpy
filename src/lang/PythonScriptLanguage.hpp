@@ -7,25 +7,6 @@ using namespace godot;
 
 namespace pkpy {
 
-struct PythonScriptReloadingContext {
-	StringName class_name;
-	StringName extends;
-	int counter;
-
-	PythonScriptReloadingContext() :
-			class_name(), extends(), counter(0) {}
-
-	inline void reset() {
-		class_name = StringName();
-		extends = StringName();
-		counter = 0;
-	}
-
-	inline int next_index() {
-		return counter++;
-	}
-};
-
 class PythonScriptLanguage : public ScriptLanguageExtension {
 	GDCLASS(PythonScriptLanguage, ScriptLanguageExtension);
 
@@ -93,8 +74,6 @@ public:
 	static PythonScriptLanguage *get_singleton();
 	static PythonScriptLanguage *get_or_create_singleton();
 	static void delete_singleton();
-
-	PythonScriptReloadingContext reloading_context;
 
 protected:
 	static void _bind_methods();

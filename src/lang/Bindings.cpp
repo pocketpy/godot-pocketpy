@@ -18,7 +18,7 @@ static void setup_exports() {
 	});
 
 	py_bind(pyctx()->godot, "export(cls, default=None)", [](int argc, py_Ref argv) -> bool {
-		auto ctx = &PythonScriptLanguage::get_singleton()->reloading_context;
+		auto ctx = &pyctx()->reloading_context;
 		StringName type_name;
 
 		if (py_istype(&argv[0], tp_type)) {
@@ -53,13 +53,17 @@ static void setup_exports() {
 		return true;
 	});
 
-	// py_bind(pyctx()->godot, "export_range(min, max, step, *extra_hints, default=None)", [](int argc, py_Ref argv) -> bool {
-	// 	auto ctx = &PythonScriptLanguage::get_singleton()->reloading_context;
-	// 	ExportStatement* ud = (ExportStatement *)py_newobject(py_retval(), pyctx()->tp_ExportStatement, 0, sizeof(ExportStatement));
-	// 	ud->index = ctx->next_index();
-	// 	ud->template_ = "@export_range() var ?";
-	// 	return true;
-	// });
+	py_bind(pyctx()->godot, "export_range(min, max, step, *extra_hints, default=None)", [](int argc, py_Ref argv) -> bool {
+		auto ctx = &pyctx()->reloading_context;
+		ExportStatement *ud = (ExportStatement *)py_newobject(py_retval(), pyctx()->tp_ExportStatement, 0, sizeof(ExportStatement));
+		ud->index = ctx->next_index();
+		Variant min = py_tovariant(&argv[0]);
+		Variant max = py_tovariant(&argv[1]);
+		Variant step = py_tovariant(&argv[2]);
+		ud->template_ = String("@export_range({0}, {1}, {2}) var ?").format(Array::make(min, max, step));
+		ud->default_value = py_tovariant(&argv[4]);
+		return true;
+	});
 }
 
 void setup_python_bindings() {
@@ -94,7 +98,7 @@ void setup_python_bindings() {
 
 	// Extends
 	py_bindfunc(godot, "Extends", [](int argc, py_Ref argv) -> bool {
-		auto ctx = &PythonScriptLanguage::get_singleton()->reloading_context;
+		auto ctx = &pyctx()->reloading_context;
 		PY_CHECK_ARGC(1);
 		PY_CHECK_ARG_TYPE(0, pyctx()->tp_NativeClass);
 		StringName nativeClass = *(StringName *)py_touserdata(&argv[0]);

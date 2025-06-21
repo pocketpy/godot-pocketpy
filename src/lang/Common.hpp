@@ -11,6 +11,25 @@ using namespace godot;
 
 namespace pkpy {
 
+struct PythonScriptReloadingContext {
+	StringName class_name;
+	StringName extends;
+	int counter;
+
+	PythonScriptReloadingContext() :
+			class_name(), extends(), counter(0) {}
+
+	inline void reset() {
+		class_name = StringName();
+		extends = StringName();
+		counter = 0;
+	}
+
+	inline int next_index() {
+		return counter++;
+	}
+};
+
 struct PythonContext {
 	py_GlobalRef godot;
 	py_Type tp_Script;
@@ -20,6 +39,7 @@ struct PythonContext {
 	py_Type tp_ExportStatement;
 	std::thread::id main_thread_id;
 	std::atomic_flag lock;
+	PythonScriptReloadingContext reloading_context;
 };
 
 struct ExportStatement {

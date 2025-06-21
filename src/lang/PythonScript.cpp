@@ -42,14 +42,10 @@ Ref<Script> PythonScript::_get_base_script() const {
 }
 
 StringName PythonScript::_get_global_name() const {
-	if (!meta.is_valid)
-		return StringName();
 	return meta.class_name;
 }
 
 bool PythonScript::_inherits_script(const Ref<Script> &script) const {
-	// if (!meta.is_valid)
-	// 	return false;
 	// if (const PythonScript *py_script = Object::cast_to<PythonScript>(script.ptr())) {
 	// 	py_Type derived = meta.exposed_type;
 	// 	py_Type base = py_script->meta.exposed_type;
@@ -61,8 +57,6 @@ bool PythonScript::_inherits_script(const Ref<Script> &script) const {
 }
 
 StringName PythonScript::_get_instance_base_type() const {
-	if (!meta.is_valid)
-		return StringName();
 	return meta.extends;
 }
 
@@ -92,7 +86,6 @@ String PythonScript::_get_source_code() const {
 
 void PythonScript::_set_source_code(const String &code) {
 	source_code = code;
-	_reload(true);
 }
 
 Error PythonScript::_reload(bool keep_state) {
@@ -107,14 +100,10 @@ Error PythonScript::_reload(bool keep_state) {
 		py_switchvm(0);
 	}
 
-	auto ctx = &PythonScriptLanguage::get_singleton()->reloading_context;
+	auto ctx = &pyctx()->reloading_context;
 	ctx->reset();
-
-	meta.gds.unref();
-	meta.class_name = StringName();
-	meta.extends = StringName();
-	meta.default_values.clear();
 	meta.is_valid = false;
+	PythonScriptMeta new_meta;
 
 	String basename = get_path().get_file().get_basename();
 	if (basename.is_empty() || !has_source_code()) {
@@ -173,23 +162,25 @@ Error PythonScript::_reload(bool keep_state) {
 	buffer.push_back("");
 	for (const ExportStatement &e : exports) {
 		buffer.push_back(e.template_.replace("?", e.name));
-		meta.default_values[e.name] = e.default_value;
+		new_meta.default_values[e.name] = e.default_value;
 	}
 
 	Ref<GDScript> gds = memnew(GDScript);
-	meta.gds = gds;
-	meta.gds->set_source_code(String("\n").join(buffer));
-	Error err = meta.gds->reload(false);
+	new_meta.gds = gds;
+	new_meta.gds->set_source_code(String("\n").join(buffer));
+	// print source code
+	printf("%s\n", new_meta.gds->get_source_code().utf8().get_data());
+	Error err = new_meta.gds->reload(false);
 	if (err != OK) {
-		// printf("%s\n", meta.gds->get_source_code().utf8().get_data());
 		ERR_PRINT("Failed to compile GDScript: " + itos(err));
 		return ERR_COMPILATION_FAILED;
 	}
 
-	meta.class_name = ctx->class_name;
-	meta.extends = ctx->extends;
+	new_meta.class_name = ctx->class_name;
+	new_meta.extends = ctx->extends;
 
-	meta.is_valid = true;
+	new_meta.is_valid = true;
+	meta = std::move(new_meta);
 	return OK;
 }
 
@@ -219,8 +210,6 @@ Dictionary PythonScript::_get_method_info(const StringName &p_method) const {
 }
 
 bool PythonScript::_is_tool() const {
-	if (!meta.is_valid)
-		return false;
 	return meta.gds->is_tool();
 }
 
@@ -246,7 +235,7 @@ TypedArray<Dictionary> PythonScript::_get_script_signal_list() const {
 }
 
 bool PythonScript::_has_property_default_value(const StringName &p_property) const {
-	return meta.default_values.has(p_property);
+	return _get_property_default_value(p_property).get_type() != Variant::NIL;
 }
 
 Variant PythonScript::_get_property_default_value(const StringName &p_property) const {
@@ -286,10 +275,6 @@ Dictionary PythonScript::_get_constants() const {
 
 TypedArray<StringName> PythonScript::_get_members() const {
 	TypedArray<StringName> members;
-	TypedArray<Dictionary> properties = get_property_list();
-	for (int i = 0; i < properties.size(); i++) {
-		members.push_back(properties[i].get("name"));
-	}
 	return members;
 }
 

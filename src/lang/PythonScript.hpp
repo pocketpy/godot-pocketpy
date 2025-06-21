@@ -14,6 +14,14 @@ using namespace godot;
 
 namespace pkpy {
 
+struct PythonScriptMeta {
+	Ref<GDScript> gds;
+	StringName class_name;
+	StringName extends;
+	HashMap<StringName, Variant> default_values;
+	bool is_valid;
+};
+
 class PythonScript : public ScriptExtension {
 	GDCLASS(PythonScript, ScriptExtension);
 
@@ -68,14 +76,7 @@ protected:
 	void _update_placeholder_exports(void *placeholder) const;
 
 	String source_code;
-
-	struct {
-		Ref<GDScript> gds;
-		StringName class_name;
-		StringName extends;
-		HashMap<StringName, Variant> default_values;
-		bool is_valid;
-	} meta;
+	PythonScriptMeta meta;
 
 	bool placeholder_fallback_enabled;
 

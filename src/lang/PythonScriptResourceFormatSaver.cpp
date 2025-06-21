@@ -23,9 +23,10 @@ Error PythonScriptResourceFormatSaver::_save(const Ref<Resource> &resource, cons
 	Error error = file->get_error();
 	switch (error) {
 		case OK:
-		case ERR_FILE_EOF:
+		case ERR_FILE_EOF: {
+			py_script->reload();
 			return OK;
-
+		}
 		default:
 			return error;
 	}

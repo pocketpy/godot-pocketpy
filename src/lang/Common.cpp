@@ -2,10 +2,12 @@
 
 namespace pkpy {
 
-static PythonContext _pyctx;
+static PythonContext *_pyctx;
 
 PythonContext *pyctx() {
-	return &_pyctx;
+	if (!_pyctx)
+		_pyctx = new PythonContext();
+	return _pyctx;
 }
 
 void py_newvariant(py_OutRef out, const Variant *val) {
@@ -62,7 +64,7 @@ void py_newvariant(py_OutRef out, const Variant *val) {
 		case Variant::PACKED_COLOR_ARRAY:
 		case Variant::PACKED_VECTOR4_ARRAY:
 		case Variant::VARIANT_MAX: {
-			void *ud = py_newobject(out, _pyctx.tp_Variant, 0, sizeof(Variant));
+			void *ud = py_newobject(out, pyctx()->tp_Variant, 0, sizeof(Variant));
 			Variant *v = new (ud) Variant(*val);
 			break;
 		}
@@ -92,7 +94,7 @@ Variant py_tovariant(py_Ref val) {
 			return String::utf8(sv.data, sv.size);
 		}
 		default: {
-			if (py_istype(val, _pyctx.tp_Variant)) {
+			if (py_istype(val, pyctx()->tp_Variant)) {
 				void *ud = py_touserdata(val);
 				return *static_cast<Variant *>(ud);
 			} else {

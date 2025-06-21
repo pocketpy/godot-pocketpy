@@ -1,7 +1,7 @@
-from godot import Node, export, Extends
+from godot import *
 
 class MyScript(Extends(Node)):
 	x = export(int, default=10)
 	y = export(Node)
-	z = export(float, default=2.0)
-	w = export(str, default='abc')
+	z = export_range(5, 50, 1)
+	w = export(str, default='ab')
