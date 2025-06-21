@@ -269,8 +269,9 @@ TypedArray<Dictionary> PythonScript::_get_script_method_list() const {
 
 TypedArray<Dictionary> PythonScript::_get_script_property_list() const {
 	auto retval = meta.gds->get_script_property_list();
-	if (!retval.is_empty() && retval[0].get("type") == Variant(0)) {
-		retval.remove_at(0);
+	// category
+	if (!retval.is_empty() && retval[0].get("usage") == Variant(128)) {
+		retval[0].set("name", meta.class_name);
 	}
 	return retval;
 }
