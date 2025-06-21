@@ -60,8 +60,12 @@ static void setup_exports() {
 		Variant min = py_tovariant(&argv[0]);
 		Variant max = py_tovariant(&argv[1]);
 		Variant step = py_tovariant(&argv[2]);
+		bool any_is_float = min.get_type() == Variant::FLOAT || max.get_type() == Variant::FLOAT || step.get_type() == Variant::FLOAT;
 		ud->template_ = String("@export_range({0}, {1}, {2}) var ?").format(Array::make(min, max, step));
 		ud->default_value = py_tovariant(&argv[4]);
+		if (any_is_float && ud->default_value.get_type() == Variant::INT) {
+			ud->default_value = (double)ud->default_value;
+		}
 		return true;
 	});
 }

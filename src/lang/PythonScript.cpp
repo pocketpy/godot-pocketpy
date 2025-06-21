@@ -331,7 +331,7 @@ void PythonScript::_update_placeholder_exports(void *placeholder) const {
 			continue;
 		}
 
-		WARN_PRINT("Property '" + name + "' has type " + Variant::get_type_name((Variant::Type)type) + ", but its default value is " + Variant::get_type_name(val.get_type()));
+		// WARN_PRINT("Property '" + name + "' has type " + Variant::get_type_name((Variant::Type)type) + ", but its default value is " + Variant::get_type_name(val.get_type()));
 		default_values[name] = construct_default_variant((Variant::Type)type);
 	}
 	godot::internal::gdextension_interface_placeholder_script_instance_update(placeholder, properties._native_ptr(), default_values._native_ptr());
