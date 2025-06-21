@@ -207,6 +207,13 @@ PythonScriptInstance *PythonScriptInstance::attached_to_object(Object *owner) {
 	}
 }
 
+void PythonScriptInstance::gc_mark_instances(void (*f)(py_Ref val, void *ctx), void *ctx) {
+	for (auto &kv : known_instances) {
+		PythonScriptInstance *instance = kv.value;
+		f(&instance->py, ctx);
+	}
+}
+
 HashMap<Object *, PythonScriptInstance *> PythonScriptInstance::known_instances;
 
 } //namespace pkpy

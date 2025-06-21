@@ -8,9 +8,6 @@
 namespace pkpy {
 
 static void setup_exports() {
-	pyctx()->main_thread_id = std::this_thread::get_id();
-	pyctx()->lock.clear();
-
 	// export
 	pyctx()->tp_ExportStatement = py_newtype("_ExportStatement", tp_object, pyctx()->godot, [](void *ud) {
 		ExportStatement *self = (ExportStatement *)ud;
@@ -71,6 +68,10 @@ static void setup_exports() {
 }
 
 void setup_python_bindings() {
+	pyctx()->main_thread_id = std::this_thread::get_id();
+	pyctx()->lock.clear();
+	py_callbacks()->gc_mark = PythonScriptInstance::gc_mark_instances;
+
 	py_GlobalRef godot = pyctx()->godot = py_newmodule("godot");
 
 	// Script

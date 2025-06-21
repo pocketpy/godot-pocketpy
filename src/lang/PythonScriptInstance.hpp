@@ -21,6 +21,7 @@ struct PythonScriptInstance {
 	Ref<PythonScript> script;
 	py_TValue py;
 
+	static void gc_mark_instances(void (*f)(py_Ref val, void *ctx), void *ctx);
 private:
 	static HashMap<Object *, PythonScriptInstance *> known_instances;
 };
