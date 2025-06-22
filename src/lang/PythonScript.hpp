@@ -16,10 +16,20 @@ namespace pkpy {
 
 struct PythonScriptMeta {
 	Ref<GDScript> gds;
+	py_Type type;
 	StringName class_name;
 	StringName extends;
 	HashMap<StringName, Variant> default_values;
 	bool is_valid;
+
+	PythonScriptMeta() :
+			gds(nullptr),
+			type(0),
+			class_name(),
+			extends(),
+			default_values(),
+			is_valid(false) {
+	}
 };
 
 class PythonScript : public ScriptExtension {

@@ -40,6 +40,9 @@ struct PythonContext {
 	std::thread::id main_thread_id;
 	std::atomic_flag lock;
 	PythonScriptReloadingContext reloading_context;
+	struct {
+		py_Name __init__;
+	} names;
 };
 
 struct ExportStatement {

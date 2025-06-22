@@ -9,5 +9,8 @@ c = 50
 
 [node name="gds_node" type="Node" parent="."]
 
-[node name="py_node" type="Node" parent="."]
+[node name="py_node" type="Node" parent="." node_paths=PackedStringArray("y")]
 script = ExtResource("2_0xm2m")
+x = -100
+y = NodePath("../gds_node")
+z = 4.8

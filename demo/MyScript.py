@@ -6,5 +6,8 @@ class MyScript(Extends(Node)):
 	z = export_range(1.2, 10.2, 0.1, default=5)
 	w = export(str, default='ab')
 
+	def __init__(self):
+		print(self.x, self.y, self.z, self.w)
+
 	def _ready(self):
 		print("_ready")

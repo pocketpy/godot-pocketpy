@@ -70,6 +70,7 @@ static void setup_exports() {
 void setup_python_bindings() {
 	pyctx()->main_thread_id = std::this_thread::get_id();
 	pyctx()->lock.clear();
+	pyctx()->names.__init__ = py_name("__init__");
 	py_callbacks()->gc_mark = PythonScriptInstance::gc_mark_instances;
 
 	py_GlobalRef godot = pyctx()->godot = py_newmodule("godot");

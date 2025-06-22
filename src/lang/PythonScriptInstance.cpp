@@ -8,7 +8,7 @@
 
 namespace pkpy {
 
-PythonScriptInstance::PythonScriptInstance(Object *owner, Ref<PythonScript> script) :
+PythonScriptInstance::PythonScriptInstance(Object *owner, const PythonScript *script) :
 		owner(owner), script(script) {
 	known_instances.insert(owner, this);
 }
@@ -18,6 +18,9 @@ PythonScriptInstance::~PythonScriptInstance() {
 }
 
 GDExtensionBool set_func(PythonScriptInstance *p_instance, const StringName *p_name, const Variant *p_value) {
+	// print
+	String s = String("set_func: {0} = {1}").format(Array::make(*p_name, *p_value));
+	WARN_PRINT(s);
 	bool is_defined = false;
 	if (is_defined) {
 		py_StackRef p0 = py_peek(0);
@@ -109,12 +112,18 @@ GDExtensionInt get_method_argument_count_func(PythonScriptInstance *p_instance, 
 void call_func(PythonScriptInstance *p_instance, const StringName *p_method, const Variant **p_args, GDExtensionInt p_argument_count, Variant *r_return, GDExtensionCallError *r_error) {
 	py_StackRef p0 = py_peek(0);
 	py_push(&p_instance->py);
-	py_pushmethod(godot_name_to_python(*p_method));
+	bool ok = py_pushmethod(godot_name_to_python(*p_method));
+	if (!ok) {
+		ERR_PRINT("No such method: " + String(*p_method));
+		r_error->error = GDEXTENSION_CALL_ERROR_INVALID_METHOD;
+		return;
+	}
+
 	for (GDExtensionInt i = 0; i < p_argument_count; ++i) {
 		py_StackRef arg = py_pushtmp();
 		py_newvariant(arg, p_args[i]);
 	}
-	bool ok = py_vectorcall((uint16_t)p_argument_count, 0);
+	ok = py_vectorcall((uint16_t)p_argument_count, 0);
 	if (ok) {
 		*r_return = py_tovariant(py_retval());
 		r_error->error = GDEXTENSION_CALL_OK;
@@ -149,7 +158,7 @@ GDExtensionBool refcount_decremented_func(PythonScriptInstance *) {
 }
 
 void *get_script_func(PythonScriptInstance *instance) {
-	return instance->script.ptr()->_owner;
+	return instance->script->_owner;
 }
 
 GDExtensionBool is_placeholder_func(PythonScriptInstance *instance) {
@@ -164,7 +173,6 @@ void *get_language_func(PythonScriptInstance *instance) {
 }
 
 void free_func(PythonScriptInstance *instance) {
-	memdelete(instance);
 }
 
 GDExtensionScriptInstanceInfo3 script_instance_info = {

@@ -61,8 +61,22 @@ StringName PythonScript::_get_instance_base_type() const {
 }
 
 void *PythonScript::_instance_create(Object *for_object) const {
-	PythonScriptInstance *instance = memnew(PythonScriptInstance(for_object, Ref<PythonScript>(this)));
-	return godot::internal::gdextension_interface_script_instance_create3(PythonScriptInstance::get_script_instance_info(), instance);
+	PythonScriptInstance *ud = (PythonScriptInstance *)py_newobject(py_retval(), meta.type, -1, sizeof(PythonScriptInstance));
+	new (ud) PythonScriptInstance(for_object, this);
+	py_assign(&ud->py, py_retval());
+	// call __init__
+	py_push(&ud->py);
+	bool ok = py_pushmethod(pyctx()->names.__init__);
+	if (!ok) {
+		py_pop();
+	} else {
+		py_StackRef p0 = py_peek(0);
+		if (!py_vectorcall(0, 0)) {
+			log_python_error_and_clearexc(p0);
+			return NULL;
+		}
+	}
+	return godot::internal::gdextension_interface_script_instance_create3(PythonScriptInstance::get_script_instance_info(), ud);
 }
 
 void *PythonScript::_placeholder_instance_create(Object *for_object) const {
@@ -122,13 +136,14 @@ Error PythonScript::_reload(bool keep_state) {
 
 	// NOTE: old variables still exist if not overwritten
 	py_StackRef p0 = py_peek(0);
-	bool ok = py_exec(source_code.utf8().get_data(), path_cstr, EXEC_MODE, module);
+	bool ok = py_exec(source_code.utf8().get_data(), path_cstr, RELOAD_MODE, module);
 	if (!ok) {
 		log_python_error_and_clearexc(p0);
 		return ERR_COMPILATION_FAILED;
 	}
 
 	ctx->class_name = StringName(basename);
+	py_Type exposed_type = tp_nil;
 	py_Name class_name = godot_name_to_python(ctx->class_name);
 	py_ItemRef exposed_class = py_getdict(module, class_name);
 	if (!exposed_class || !py_istype(exposed_class, tp_type)) {
@@ -136,6 +151,7 @@ Error PythonScript::_reload(bool keep_state) {
 		return ERR_COMPILATION_FAILED;
 	}
 
+	exposed_type = py_totype(exposed_class);
 	Vector<ExportStatement> exports;
 
 	py_applydict(
@@ -172,6 +188,7 @@ Error PythonScript::_reload(bool keep_state) {
 		return ERR_COMPILATION_FAILED;
 	}
 
+	new_meta.type = exposed_type;
 	new_meta.class_name = ctx->class_name;
 	new_meta.extends = ctx->extends;
 
@@ -256,7 +273,10 @@ TypedArray<Dictionary> PythonScript::_get_script_property_list() const {
 	auto retval = meta.gds->get_script_property_list();
 	// category
 	if (!retval.is_empty() && retval[0].get("usage") == Variant(128)) {
-		retval[0].set("name", meta.class_name);
+		char buf[32];
+		snprintf(buf, sizeof(buf), " (%d)", meta.type);
+		String category = String(meta.class_name) + buf;
+		retval[0].set("name", category);
 	}
 	return retval;
 }
