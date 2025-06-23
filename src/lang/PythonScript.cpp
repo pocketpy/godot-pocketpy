@@ -62,7 +62,7 @@ StringName PythonScript::_get_instance_base_type() const {
 
 void *PythonScript::_instance_create(Object *for_object) const {
 	PythonScriptInstance *ud = (PythonScriptInstance *)py_newobject(py_retval(), meta.type, -1, sizeof(PythonScriptInstance));
-	new (ud) PythonScriptInstance(for_object, this);
+	new (ud) PythonScriptInstance(for_object, Ref<PythonScript>(this));
 	py_assign(&ud->py, py_retval());
 	// call __init__
 	py_push(&ud->py);
@@ -252,8 +252,9 @@ bool PythonScript::_has_property_default_value(const StringName &p_property) con
 }
 
 Variant PythonScript::_get_property_default_value(const StringName &p_property) const {
-	if (meta.default_values.has(p_property)) {
-		return meta.default_values[p_property];
+	auto it = meta.default_values.find(p_property);
+	if (it != meta.default_values.end()) {
+		return it->value;
 	}
 	return Variant();
 }
@@ -336,9 +337,11 @@ void PythonScript::_update_placeholder_exports(void *placeholder) const {
 	Dictionary default_values;
 	TypedArray<Dictionary> raw_properties = _get_script_property_list();
 	for (int i = 0; i < raw_properties.size(); i++) {
-		properties.append(raw_properties[i]);
-		StringName name = raw_properties[i].get("name");
 		int type = raw_properties[i].get("type");
+		if (type == 0)
+			continue;
+		StringName name = raw_properties[i].get("name");
+		properties.append(raw_properties[i]);
 		Variant val = _get_property_default_value(name);
 
 		if (val.get_type() == type) {
@@ -346,14 +349,11 @@ void PythonScript::_update_placeholder_exports(void *placeholder) const {
 			continue;
 		}
 
-		if (val.get_type() == Variant::NIL) {
-			default_values[name] = Variant();
-			continue;
-		}
-
-		// WARN_PRINT("Property '" + name + "' has type " + Variant::get_type_name((Variant::Type)type) + ", but its default value is " + Variant::get_type_name(val.get_type()));
 		default_values[name] = construct_default_variant((Variant::Type)type);
 	}
+
+	// String repr = Variant(default_values).stringify();
+	// WARN_PRINT("Updating placeholder exports: " + repr);
 	godot::internal::gdextension_interface_placeholder_script_instance_update(placeholder, properties._native_ptr(), default_values._native_ptr());
 }
 

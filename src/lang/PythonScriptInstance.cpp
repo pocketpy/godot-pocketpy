@@ -8,7 +8,7 @@
 
 namespace pkpy {
 
-PythonScriptInstance::PythonScriptInstance(Object *owner, const PythonScript *script) :
+PythonScriptInstance::PythonScriptInstance(Object *owner, Ref<PythonScript> script) :
 		owner(owner), script(script) {
 	known_instances.insert(owner, this);
 }
