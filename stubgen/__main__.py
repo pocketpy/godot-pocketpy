@@ -249,20 +249,6 @@ def common_class_to_pyi(
 ) -> None:
     """
     Common function to process both BuiltinClass and ClassesSingle with explicit parameters
-    
-    Args:
-        pyi_w: Writer instance
-        name: Class name
-        inherits: Parent class name
-        brief_description: Brief class description
-        description: Full class description
-        constants: List of constants
-        enums: List of enums
-        methods: List of methods
-        properties: List of properties (ClassesSingle only)
-        signals: List of signals (ClassesSingle only)
-        operators: List of operators (BuiltinClass only)
-        is_builtin_class: Whether this is a builtin class
     """
     assert pyi_w.indent_level == 0
     
@@ -274,7 +260,10 @@ def common_class_to_pyi(
     
     # Class declaration
     if inherits is None:
-        pyi_w.write(f'class {name}:')
+        if is_builtin_class:
+            pyi_w.write(f'class {name}(BuiltinBase):')
+        else:
+            pyi_w.write(f'class {name}(NativeBase):')
     else:
         pyi_w.write(f"class {name}({inherits}):")
     pyi_w.indent()
@@ -398,22 +387,6 @@ def common_class_to_pyi(
         pyi_w.write('pass')
     pyi_w.write('')
     pyi_w.dedent()
-    
-    # Enums
-    if enums:
-        for e in enums:
-            pyi_w.write(f'class {name}_{e.name}(Enum):')
-            pyi_w.indent()
-            enum_description = ''
-            if e.description:
-                enum_description = e.description
-                pyi_w.write(f'"""{enum_description}')
-                pyi_w.write(f'"""')
-            if e.values:
-                for value in e.values:
-                    pyi_w.write(f'{value.name} = {value.value}')
-            pyi_w.dedent()
-            pyi_w.write('')
 
 def builtin_class_to_pyi(builtin_class: BuiltinClass, pyi_w: Writer) -> None:
     """Entry function for BuiltinClass"""
@@ -460,14 +433,83 @@ all_global_enums = all_in_one.global_enums
 all_builtin_classes = all_in_one.builtin_classes
 all_classes = all_in_one.classes
 
+# Move Object from natives to builtins, adapting structure
+
+# Find and remove Object from all_classes, and add to all_builtin_classes
+object_class = None
+for i, cls in enumerate(all_classes):
+    if cls.name == "Object":
+        object_class = all_classes.pop(i)
+        break
+if object_class is not None:
+    # Remove fields that are not present in BuiltinClass, if necessary
+    # BuiltinClass does not have: properties, signals, etc.
+    # We'll keep only the fields that BuiltinClass expects.
+    object_builtin = type("BuiltinClass", (), {})()
+    object_builtin.name = object_class.name
+    object_builtin.inherits = 'NativeBase'
+    object_builtin.brief_description = getattr(object_class, "brief_description", "")
+    object_builtin.description = getattr(object_class, "description", "")
+    object_builtin.constants = getattr(object_class, "constants", [])
+    object_builtin.enums = getattr(object_class, "enums", [])
+    object_builtin.methods = getattr(object_class, "methods", [])
+    object_builtin.operators = getattr(object_class, "operators", [])
+    # Add to builtins
+    all_builtin_classes.append(object_builtin)
+
+
+
 
 # ============= generate stub for dummy builtin classes in godot ============
 
-pyi_w = Writer()
+import os
 
-header = [
+# 收集所有枚举（全局枚举 + 所有 class 的枚举）
+all_enums = []  # (class_name, enum_obj)
+for builtin in all_builtin_classes:
+    if hasattr(builtin, 'enums') and builtin.enums:
+        for enum in builtin.enums:
+            all_enums.append((builtin.name, enum))
+for cls in all_classes:
+    if hasattr(cls, 'enums') and cls.enums:
+        for enum in cls.enums:
+            all_enums.append((cls.name, enum))
+
+# Ensure the stub files' parent directories exist
+os.makedirs(os.path.dirname(STUB_ENUM_PATH), exist_ok=True)
+os.makedirs(os.path.dirname(STUB_BUILTIN_PATH), exist_ok=True)
+os.makedirs(os.path.dirname(STUB_NATIVE_PATH), exist_ok=True)
+
+# Write global enums and all class enums to enums.pyi
+enums_pyi_w = Writer()
+enums_pyi_w.buffer += [
     'from enum import Enum',
+    '',
+]
+for global_enum in all_global_enums:
+    global_enum_to_pyi(global_enum, enums_pyi_w)
+for class_name, enum in all_enums:
+    enums_pyi_w.write(f'class {class_name}_{enum.name}(Enum):')
+    enums_pyi_w.indent()
+    if getattr(enum, 'description', None):
+        enums_pyi_w.write(f'"""{enum.description}')
+        enums_pyi_w.write(f'"""')
+    if getattr(enum, 'values', None):
+        for value in enum.values:
+            enums_pyi_w.write(f'{value.name} = {value.value}')
+    enums_pyi_w.dedent()
+    enums_pyi_w.write('')
+with open(STUB_ENUM_PATH, 'w', encoding='utf-8') as fp:
+    fp.write(str(enums_pyi_w))
+
+# Write builtin classes to builtins.pyi
+builtins_pyi_w = Writer()
+builtins_pyi_w.buffer += [
     "from typing import TypeVar, Generic",
+    f"from .{os.path.basename(STUB_ENUM_PATH).replace('.pyi', '')} import *",
+    "",
+    "class NativeBase: pass",
+    "class BuiltinBase: pass",
     "",
     "T = TypeVar('T')",
     "",
@@ -480,88 +522,129 @@ header = [
     "",
     ""
 ]
-pyi_w.buffer += header
-
-for global_enum in all_global_enums:
-    global_enum_to_pyi(global_enum, pyi_w)
-
 for single_builtin_class in all_builtin_classes:
-    builtin_class_to_pyi(single_builtin_class, pyi_w)
+    builtin_class_to_pyi(single_builtin_class, builtins_pyi_w)
+with open(STUB_BUILTIN_PATH, 'w', encoding='utf-8') as fp:
+    fp.write(str(builtins_pyi_w))
 
+# Write native classes to natives.pyi
+natives_pyi_w = Writer()
+natives_pyi_w.buffer += [
+    f'from .{os.path.basename(STUB_ENUM_PATH).replace(".pyi", "")} import *',
+    f'from .{os.path.basename(STUB_BUILTIN_PATH).replace(".pyi", "")} import *',
+    "",
+    "",
+    "",
+]
 for single_class in all_classes:
-    single_class_to_pyi(single_class, pyi_w)
-
-with open(STUB_CLASSES_PATH, 'w', encoding='utf-8') as fp:
-    fp.write(str(pyi_w))
-    
+    single_class_to_pyi(single_class, natives_pyi_w)
+with open(STUB_NATIVE_PATH, 'w', encoding='utf-8') as fp:
+    fp.write(str(natives_pyi_w))
 
 # ============= generate stub for exposed godot api ============
+# pyi_w = Writer()
+
+# header = [
+#     'from typing import TypeVar, Literal, overload',
+#     '',
+#     'T = TypeVar("T")',
+#     '',
+#     '',
+#     'class ExtendsHint[T]:',
+#     '    @property',
+#     '    def owner(self) -> T: ...',
+#     '',
+# ]
+
+# pyi_w.buffer += header
+
+
+
+# # Define Extends function for each class
+# def wrap_class(name: str, pyi_w: Writer):
+#     pyi_w.write('@overload')
+#     pyi_w.write(f'def Extends(cls: Literal[\'{name}\']) -> type[ExtendsHint[{name}]]: ...')
+
+# for builtin_class in all_builtin_classes:
+#     wrap_class(builtin_class.name, pyi_w)
+
+# for single_class in all_classes:
+#     wrap_class(single_class.name, pyi_w)
+
+
+# # Define group size for splitting classes
+# GROUP_SIZE = 50
+
+# # Split builtin classes into groups
+# builtin_class_groups = []
+# for i in range(0, len(all_builtin_classes), GROUP_SIZE):
+#     group = all_builtin_classes[i:i+GROUP_SIZE]
+#     builtin_class_groups.append(group)
+
+# # Split native classes into groups
+# native_class_groups = []
+# for i in range(0, len(all_classes), GROUP_SIZE):
+#     group = all_classes[i:i+GROUP_SIZE]
+#     native_class_groups.append(group)
+
+# # Generate Literal types for each group
+# for i, group in enumerate(builtin_class_groups):
+#     class_list_str = ', '.join([f"'{c.name}'" for c in group])
+#     pyi_w.write(f"BuiltinClassGroup{i} = Literal[{class_list_str}]")
+
+# for i, group in enumerate(native_class_groups):
+#     class_list_str = ', '.join([f"'{c.name}'" for c in group])
+#     pyi_w.write(f"CGNativeClassGroup{i} = Literal[{class_list_str}]")
+
+# # Create union types for all groups
+# builtin_groups_union = ' | '.join([f"BuiltinClassGroup{i}" for i in range(len(builtin_class_groups))])
+# native_groups_union = ' | '.join([f"CGNativeClassGroup{i}" for i in range(len(native_class_groups))])
+
+# pyi_w.write(f"BuiltinClass = {builtin_groups_union}")
+# pyi_w.write(f"CGNativeClass = {native_groups_union}")
+
+# # Define export function
+# pyi_w.write('@overload')
+# pyi_w.write('def export(cls: BuiltinClass): ...')
+# pyi_w.write('@overload')
+# pyi_w.write('def Extends(cls: CGNativeClass): ...')
+
+
+
+#### 6/23 ####
+
+# 本次改动: 
+# 1. 添加了 GDBuiltinClass 和 GDNativeClass 类型
+#  - 让builtins和natives中没有继承的基类继承自BuiltinBase和NativeBase, 相当于一层封装
+# 2. 将Object类型移入builtins_class.pyi
+# 3. 将所有枚举类型都整理到enums.pyi, 不再仅仅是全局命名空间下的枚举类型
+
 pyi_w = Writer()
-
-header = [
-    'from typing import TypeVar, Literal, overload',
-    '',
-    'T = TypeVar("T")',
-    '',
-    '',
-    'class ExtendsHint[T]:',
-    '    @property',
-    '    def owner(self) -> T: ...',
-    '',
-]
-
-pyi_w.buffer += header
+pyi_w.write(f'''
+from typing import TypeVar
+from .{os.path.basename(STUB_ENUM_PATH).replace('.pyi', '')} import *
+from .{os.path.basename(STUB_BUILTIN_PATH).replace('.pyi', '')} import *
+from .{os.path.basename(STUB_NATIVE_PATH).replace('.pyi', '')} import *
 
 
+class GDBuiltinClass[T: BuiltinBase]:
+    def __init__(self, name: str): ...
 
-# Define Extends function for each class
-def wrap_class(name: str, pyi_w: Writer):
-    pyi_w.write('@overload')
-    pyi_w.write(f'def Extends(cls: Literal[\'{name}\']) -> type[ExtendsHint[{name}]]: ...')
+class GDNativeClass[T: NativeBase]:
+    def __init__(self, name: str): ...
 
-for builtin_class in all_builtin_classes:
-    wrap_class(builtin_class.name, pyi_w)
+class ExtendsHint[T: BuiltinBase | NativeBase]:
+    @property
+    def owner(self) -> T: ...
 
-for single_class in all_classes:
-    wrap_class(single_class.name, pyi_w)
+def Extends[T: NativeBase](cls: GDNativeClass[T]) -> type[ExtendsHint[T]]: ...
+
+# e.g.
+Resource = GDNativeClass[Resource]('Resource')
+
+''')
 
 
-# Define group size for splitting classes
-GROUP_SIZE = 50
-
-# Split builtin classes into groups
-builtin_class_groups = []
-for i in range(0, len(all_builtin_classes), GROUP_SIZE):
-    group = all_builtin_classes[i:i+GROUP_SIZE]
-    builtin_class_groups.append(group)
-
-# Split native classes into groups
-native_class_groups = []
-for i in range(0, len(all_classes), GROUP_SIZE):
-    group = all_classes[i:i+GROUP_SIZE]
-    native_class_groups.append(group)
-
-# Generate Literal types for each group
-for i, group in enumerate(builtin_class_groups):
-    class_list_str = ', '.join([f"'{c.name}'" for c in group])
-    pyi_w.write(f"BuiltinClassGroup{i} = Literal[{class_list_str}]")
-
-for i, group in enumerate(native_class_groups):
-    class_list_str = ', '.join([f"'{c.name}'" for c in group])
-    pyi_w.write(f"CGNativeClassGroup{i} = Literal[{class_list_str}]")
-
-# Create union types for all groups
-builtin_groups_union = ' | '.join([f"BuiltinClassGroup{i}" for i in range(len(builtin_class_groups))])
-native_groups_union = ' | '.join([f"CGNativeClassGroup{i}" for i in range(len(native_class_groups))])
-
-pyi_w.write(f"BuiltinClass = {builtin_groups_union}")
-pyi_w.write(f"CGNativeClass = {native_groups_union}")
-
-# Define export function
-pyi_w.write('@overload')
-pyi_w.write('def export(cls: BuiltinClass): ...')
-pyi_w.write('@overload')
-pyi_w.write('def Extends(cls: CGNativeClass): ...')
 
 
 with open(EXPOSED_STUB_PATH, 'w', encoding='utf-8') as fp:

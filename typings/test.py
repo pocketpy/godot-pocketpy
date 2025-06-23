@@ -46,4 +46,3 @@ class MyClass(Extends[Node]):
     y_int = export(int, default=5)
     z_float = export(float, default=3.14)
 
-    
