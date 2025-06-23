@@ -475,10 +475,6 @@ for cls in all_classes:
         for enum in cls.enums:
             all_enums.append((cls.name, enum))
 
-# Ensure the stub files' parent directories exist
-os.makedirs(os.path.dirname(STUB_ENUM_PATH), exist_ok=True)
-os.makedirs(os.path.dirname(STUB_BUILTIN_PATH), exist_ok=True)
-os.makedirs(os.path.dirname(STUB_NATIVE_PATH), exist_ok=True)
 
 # Write global enums and all class enums to enums.pyi
 enums_pyi_w = Writer()
@@ -506,7 +502,7 @@ with open(STUB_ENUM_PATH, 'w', encoding='utf-8') as fp:
 builtins_pyi_w = Writer()
 builtins_pyi_w.buffer += [
     "from typing import TypeVar, Generic",
-    f"from .{os.path.basename(STUB_ENUM_PATH).replace('.pyi', '')} import *",
+    f"from {os.path.basename(STUB_ENUM_PATH).replace('.py', '')} import *",
     "",
     "class NativeBase: pass",
     "class BuiltinBase: pass",
@@ -530,7 +526,7 @@ with open(STUB_BUILTIN_PATH, 'w', encoding='utf-8') as fp:
 # Write native classes to natives.pyi
 natives_pyi_w = Writer()
 natives_pyi_w.buffer += [
-    f'from .{os.path.basename(STUB_ENUM_PATH).replace(".pyi", "")} import *',
+    f'from {os.path.basename(STUB_ENUM_PATH).replace(".py", "")} import *',
     f'from .{os.path.basename(STUB_BUILTIN_PATH).replace(".pyi", "")} import *',
     "",
     "",
@@ -540,6 +536,13 @@ for single_class in all_classes:
     single_class_to_pyi(single_class, natives_pyi_w)
 with open(STUB_NATIVE_PATH, 'w', encoding='utf-8') as fp:
     fp.write(str(natives_pyi_w))
+
+
+with open(STUB_TYPING_INIT_PATH, 'w', encoding='utf-8') as fp:
+    fp.write(f'''
+from .{os.path.basename(STUB_BUILTIN_PATH).replace('.pyi', '')} import *
+from .{os.path.basename(STUB_NATIVE_PATH).replace('.pyi', '')} import *
+''')
 
 # ============= generate stub for exposed godot api ============
 # pyi_w = Writer()
@@ -613,18 +616,13 @@ with open(STUB_NATIVE_PATH, 'w', encoding='utf-8') as fp:
 
 #### 6/23 ####
 
-# 本次改动: 
-# 1. 添加了 GDBuiltinClass 和 GDNativeClass 类型
-#  - 让builtins和natives中没有继承的基类继承自BuiltinBase和NativeBase, 相当于一层封装
-# 2. 将Object类型移入builtins_class.pyi
-# 3. 将所有枚举类型都整理到enums.pyi, 不再仅仅是全局命名空间下的枚举类型
+
 
 pyi_w = Writer()
 pyi_w.write(f'''
 from typing import TypeVar
-from .{os.path.basename(STUB_ENUM_PATH).replace('.pyi', '')} import *
-from .{os.path.basename(STUB_BUILTIN_PATH).replace('.pyi', '')} import *
-from .{os.path.basename(STUB_NATIVE_PATH).replace('.pyi', '')} import *
+from {os.path.basename(STUB_ENUM_PATH).replace('.py', '')} import *
+from typings import *
 
 
 class GDBuiltinClass[T: BuiltinBase]:
