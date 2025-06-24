@@ -1,6 +1,6 @@
 from typing import TypeVar, Generic, ClassVar, List, Self, Any, Callable, Optional, Union, Dict, Tuple
 from dataclasses import dataclass
-from enum import Enum, auto
+from godot.enum import Enum, auto
 
 # 类型变量定义
 T = TypeVar('T')

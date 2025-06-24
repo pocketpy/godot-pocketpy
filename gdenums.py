@@ -1,4 +1,4 @@
-from enum import Enum
+from godot.enum import Enum
 
 class Side:
     SIDE_LEFT = 0
