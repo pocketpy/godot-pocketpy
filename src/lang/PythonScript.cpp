@@ -19,6 +19,7 @@ namespace pkpy {
 PythonScript::PythonScript() :
 		ScriptExtension() {
 	placeholders.insert(this, {});
+	placeholder_fallback_enabled = true;
 }
 
 PythonScript::~PythonScript() {
@@ -64,6 +65,13 @@ void *PythonScript::_instance_create(Object *for_object) const {
 	PythonScriptInstance *ud = (PythonScriptInstance *)py_newobject(py_retval(), meta.type, -1, sizeof(PythonScriptInstance));
 	new (ud) PythonScriptInstance(for_object, Ref<PythonScript>(this));
 	py_assign(&ud->py, py_retval());
+	// assign default values
+	for (const auto &it : meta.default_values) {
+		py_Name name = godot_name_to_python(it.key);
+		Variant value = it.value.duplicate();
+		py_newvariant(py_retval(), &value);
+		py_setdict(&ud->py, name, py_retval());
+	}
 	// call __init__
 	py_push(&ud->py);
 	bool ok = py_pushmethod(pyctx()->names.__init__);
@@ -106,18 +114,18 @@ Error PythonScript::_reload(bool keep_state) {
 	(void)keep_state;
 
 	PythonContextLock lock;
-
-	printf("=> PythonScript: %p reload from %s\n", this, get_path().utf8().get_data());
-
 	std::thread::id tid = std::this_thread::get_id();
 	if (tid != pyctx()->main_thread_id) {
 		py_switchvm(0);
 	}
 
-	auto ctx = &pyctx()->reloading_context;
-	ctx->reset();
+	placeholder_fallback_enabled = true;
+	printf("=> PythonScript: %p reload from %s\n", this, get_path().utf8().get_data());
+
 	meta.is_valid = false;
 	PythonScriptMeta new_meta;
+	auto ctx = &pyctx()->reloading_context;
+	ctx->reset();
 
 	String basename = get_path().get_file().get_basename();
 	if (basename.is_empty() || !has_source_code()) {
@@ -194,6 +202,8 @@ Error PythonScript::_reload(bool keep_state) {
 
 	new_meta.is_valid = true;
 	meta = std::move(new_meta);
+
+	placeholder_fallback_enabled = false;
 	return OK;
 }
 
@@ -273,7 +283,7 @@ TypedArray<Dictionary> PythonScript::_get_script_method_list() const {
 TypedArray<Dictionary> PythonScript::_get_script_property_list() const {
 	auto retval = meta.gds->get_script_property_list();
 	// category
-	if (!retval.is_empty() && retval[0].get("usage") == Variant(128)) {
+	if (!retval.is_empty() && retval[0].get("usage") == Variant(PROPERTY_USAGE_CATEGORY)) {
 		char buf[32];
 		snprintf(buf, sizeof(buf), " (%d)", meta.type);
 		String category = String(meta.class_name) + buf;

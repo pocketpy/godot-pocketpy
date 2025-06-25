@@ -2,6 +2,7 @@
 #include "PythonScriptInstance.hpp"
 #include "PythonScriptLanguage.hpp"
 
+#include <godot_cpp/classes/engine.hpp>
 #include <godot_cpp/classes/node.hpp>
 #include <godot_cpp/core/defs.hpp>
 
@@ -72,6 +73,16 @@ void setup_python_bindings() {
 	pyctx()->lock.clear();
 	pyctx()->names.__init__ = py_name("__init__");
 	py_callbacks()->gc_mark = PythonScriptInstance::gc_mark_instances;
+	py_callbacks()->print = [](const char *msg) {
+		String s(msg);
+		if (s.ends_with(String("\n"))) {
+			s = s.substr(0, s.length() - 1);
+		}
+		print_line(msg);
+	};
+	py_callbacks()->flush = []() {
+		// No-op, Godot's print is already flushed.
+	};
 
 	py_GlobalRef godot = pyctx()->godot = py_newmodule("godot");
 

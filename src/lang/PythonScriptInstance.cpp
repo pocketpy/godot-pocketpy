@@ -18,20 +18,10 @@ PythonScriptInstance::~PythonScriptInstance() {
 }
 
 GDExtensionBool set_func(PythonScriptInstance *p_instance, const StringName *p_name, const Variant *p_value) {
-	// print
-	String s = String("set_func: {0} = {1}").format(Array::make(*p_name, *p_value));
-	WARN_PRINT(s);
-	bool is_defined = false;
+	bool is_defined = p_instance->script->meta.default_values.has(*p_name);
 	if (is_defined) {
-		py_StackRef p0 = py_peek(0);
-		py_StackRef tmp = py_pushtmp();
-		py_newvariant(tmp, p_value);
-		bool ok = py_setattr(&p_instance->py, godot_name_to_python(*p_name), tmp);
-		if (ok) {
-			py_pop();
-		} else {
-			log_python_error_and_clearexc(p0);
-		}
+		py_newvariant(py_retval(), p_value);
+		py_setdict(&p_instance->py, godot_name_to_python(*p_name), py_retval());
 		return true;
 	} else {
 		return false;
@@ -39,17 +29,16 @@ GDExtensionBool set_func(PythonScriptInstance *p_instance, const StringName *p_n
 }
 
 GDExtensionBool get_func(PythonScriptInstance *p_instance, const StringName *p_name, Variant *p_value) {
-	bool is_defined = false;
+	bool is_defined = p_instance->script->meta.default_values.has(*p_name);
 	if (is_defined) {
-		py_StackRef p0 = py_peek(0);
-		bool ok = py_getattr(&p_instance->py, godot_name_to_python(*p_name));
-		if (ok) {
-			*p_value = py_tovariant(py_retval());
+		py_ItemRef res = py_getdict(&p_instance->py, godot_name_to_python(*p_name));
+		if (res) {
+			*p_value = py_tovariant(res);
+			return true;
 		} else {
-			log_python_error_and_clearexc(p0);
 			*p_value = Variant();
+			return false;
 		}
-		return true;
 	} else {
 		return false;
 	}

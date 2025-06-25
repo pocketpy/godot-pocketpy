@@ -79,6 +79,7 @@ public:
 	// Script methods
 	Variant _new(const Variant **args, GDExtensionInt arg_count, GDExtensionCallError &error);
 
+	PythonScriptMeta meta;
 protected:
 	static void _bind_methods();
 	virtual String _to_string() const;
@@ -86,8 +87,7 @@ protected:
 	void _update_placeholder_exports(void *placeholder) const;
 
 	String source_code;
-	PythonScriptMeta meta;
-
+	
 	bool placeholder_fallback_enabled;
 
 	// TODO: use instance member instead of static map if "_placeholder_instance_create" is changed to be non-const

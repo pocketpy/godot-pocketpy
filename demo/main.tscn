@@ -12,7 +12,5 @@ z = 4.8
 
 [node name="py_node" type="Node" parent="." node_paths=PackedStringArray("y")]
 script = ExtResource("2_0xm2m")
-x = null
 y = NodePath("../gds_node")
 z = 4.8
-w = null

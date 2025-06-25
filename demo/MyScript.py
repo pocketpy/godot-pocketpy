@@ -7,7 +7,9 @@ class MyScript(Extends(Node)):
 	w = export(str, default='ab')
 
 	def __init__(self):
-		print(self.x, self.y, self.z, self.w)
+		print("__init__()")
+		print("==>", self.x, self.y, self.z, self.w)
 
 	def _ready(self):
-		print("_ready")
+		print("_ready()")
+		print("==>", self.x, self.y, self.z, self.w)
