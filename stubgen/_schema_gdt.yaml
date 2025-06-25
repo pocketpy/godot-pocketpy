@@ -1,0 +1,195 @@
+GodotInOne:
+  header:
+    version_major: 4  # 主版本号
+    version_minor: 2  # 次版本号
+    version_patch: 0  # 补丁版本号
+    version_status: "stable"  # 版本状态
+    version_build: "official"  # 构建类型
+    version_full_name: "4.2.0-stable"  # 完整版本名
+    precision: "double"  # 浮点精度
+
+  builtin_class_sizes:  # 内置类大小信息
+    - build_configuration: "float_64"  # 构建配置类型
+      sizes:
+        - name: "Vector2"  # 类名
+          size: 16  # 大小（字节）
+        - name: "String"
+          size: 16
+        # 其他内置类型大小...
+
+  builtin_class_member_offsets:  # 内置类成员偏移量
+    - build_configuration: "float_64"  # 构建配置类型
+      classes:
+        - name: "Vector2"  # 类名
+          members:
+            - member: "x"  # 成员名
+              offset: 0  # 偏移量
+              meta: ""  # 元数据
+            - member: "y"
+              offset: 8
+              meta: ""
+        # 其他类的成员偏移...
+
+  global_constants:  # 全局常量
+    - name: "PI"  # 常量名
+      value: 3.14159265358979  # 值
+      is_bitfield: false  # 是否为位字段
+      description: "Constant that represents how many times the diameter of a circle fits around its perimeter."  # 描述
+    # 其他全局常量...
+
+  global_enums:  # 全局枚举
+    - name: "Error"  # 枚举名
+      is_bitfield: false  # 是否为位字段
+      description: "Error code constants."  # 描述
+      values:  # 枚举值
+        - name: "OK"  # 值名称
+          value: 0  # 数值
+          description: "No error occurred."  # 描述
+        - name: "FAILED"
+          value: 1
+          description: "Generic error."
+        # 其他枚举值...
+    # 其他全局枚举...
+
+  utility_functions:  # 实用函数
+    - name: "print"  # 函数名
+      return_type: null  # 返回类型
+      category: "general"  # 分类
+      is_vararg: true  # 是否为可变参数
+      hash: 7798907699429896564  # 哈希值
+      arguments:  # 参数列表
+        - name: "text"  # 参数名
+          type: "Variant"  # 参数类型
+      description: "Prints one or more arguments to the console."  # 描述
+    # 其他实用函数...
+
+  builtin_classes:  # 内置类
+    - name: "Vector2"  # 类名
+      indexing_return_type: null  # 索引返回类型
+      is_keyed: false  # 是否为键控类型
+      members:  # 成员
+        - name: "x"  # 成员名
+          type: "float"  # 类型
+          description: "The vector's X component."  # 描述
+        - name: "y"
+          type: "float"
+          description: "The vector's Y component."
+      constants:  # 常量
+        - name: "ZERO"  # 常量名
+          type: "Vector2"  # 类型
+          value: "Vector2(0, 0)"  # 值
+          description: "Zero vector."  # 描述
+        # 其他常量...
+      enums:  # 枚举
+        - name: "Axis"  # 枚举名
+          description: "Enumerated value for the axes."  # 描述
+          values:  # 枚举值
+            - name: "AXIS_X"  # 值名称
+              value: 0  # 数值
+              description: "The X axis."  # 描述
+            - name: "AXIS_Y"
+              value: 1
+              description: "The Y axis."
+      operators:  # 运算符
+        - name: "+"  # 运算符名
+          right_type: "Vector2"  # 右侧类型
+          return_type: "Vector2"  # 返回类型
+          description: "Adds each component of the vectors."  # 描述
+        # 其他运算符...
+      methods:  # 方法
+        - name: "length"  # 方法名
+          return_type: "float"  # 返回类型
+          is_vararg: false  # 是否为可变参数
+          is_const: true  # 是否为常量方法
+          is_static: false  # 是否为静态方法
+          hash: 7447036042080502091  # 哈希值
+          arguments: []  # 参数列表
+          description: "Returns the length of the vector."  # 描述
+        # 其他方法...
+      constructors:  # 构造函数
+        - index: 0  # 索引
+          arguments:  # 参数列表
+            - name: "x"  # 参数名
+              type: "float"  # 参数类型
+            - name: "y"
+              type: "float"
+          description: "Constructs a Vector2 from the given x and y."  # 描述
+        # 其他构造函数...
+      has_destructor: true  # 是否有析构函数
+      brief_description: "Vector used for 2D math."  # 简短描述
+      description: "2-element structure that can be used to represent positions in 2D space or any other pair of numeric values."  # 详细描述
+    # 其他内置类...
+
+  classes:  # 引擎类
+    - name: "Node"  # 类名
+      is_refcounted: false  # 是否引用计数
+      is_instantiable: true  # 是否可实例化
+      inherits: "Object"  # 父类
+      api_type: "core"  # API类型
+      constants:  # 常量
+        - name: "NOTIFICATION_ENTER_TREE"  # 常量名
+          value: 10  # 值
+          description: "Notification received when the node enters the tree."  # 描述
+        # 其他常量...
+      enums:  # 枚举
+        - name: "ProcessMode"  # 枚举名
+          is_bitfield: false  # 是否为位字段
+          values:  # 枚举值
+            - name: "PROCESS_MODE_INHERIT"  # 值名称
+              value: 0  # 数值
+              description: "Inherits process mode from parent."  # 描述
+            # 其他枚举值...
+          description: "Process callback mode."  # 描述
+      methods:  # 方法
+        - name: "add_child"  # 方法名
+          is_const: false  # 是否为常量方法
+          is_vararg: false  # 是否为可变参数
+          is_static: false  # 是否为静态方法
+          is_virtual: false  # 是否为虚拟方法
+          hash: 3978114236390654403  # 哈希值
+          hash_compatibility: []  # 兼容哈希
+          return_value:  # 返回值
+            type: "void"  # 类型
+            meta: null  # 元数据
+          arguments:  # 参数列表
+            - name: "node"  # 参数名
+              type: "Node"  # 参数类型
+              meta: null  # 元数据
+              default_value: null  # 默认值
+            - name: "force_readable_name"
+              type: "bool"
+              meta: null
+              default_value: "false"
+          description: "Adds a child node. Nodes can have any number of children, but every child must have a unique name."  # 描述
+        # 其他方法...
+      signals:  # 信号
+        - name: "child_entered_tree"  # 信号名
+          arguments:  # 参数列表
+            - name: "node"  # 参数名
+              type: "Node"  # 参数类型
+              meta: null  # 元数据
+          description: "Emitted when a child node enters the scene tree."  # 描述
+        # 其他信号...
+      properties:  # 属性
+        - type: "ProcessMode"  # 类型
+          name: "process_mode"  # 名称
+          setter: "set_process_mode"  # setter方法
+          getter: "get_process_mode"  # getter方法
+          index: null  # 索引
+          description: "Process mode for the node."  # 描述
+        # 其他属性...
+      brief_description: "Base class for all scene objects."  # 简短描述
+      description: "Base class for all scene-based objects. Nodes are a fundamental building block for creating games."  # 详细描述
+    # 其他引擎类...
+
+  singletons:  # 单例
+    - name: "Engine"  # 单例名
+      type: "Engine"  # 类型
+    - name: "Input"
+      type: "Input"
+    # 其他单例...
+
+  native_structures:  # 原生结构
+    - name: "PhysicsServer2DExtensionRayResult"  # 结构名
+      format: "pd"  # 格式
+    # 其他原生结构...
