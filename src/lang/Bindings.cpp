@@ -78,7 +78,7 @@ void setup_python_bindings() {
 		if (s.ends_with(String("\n"))) {
 			s = s.substr(0, s.length() - 1);
 		}
-		print_line(msg);
+		print_line(s);
 	};
 	py_callbacks()->flush = []() {
 		// No-op, Godot's print is already flushed.
