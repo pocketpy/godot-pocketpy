@@ -39,7 +39,7 @@ static void setup_exports() {
 			}
 		} else if (py_istype(&argv[0], pyctx()->tp_NativeClass)) {
 			PY_CHECK_ARG_TYPE(0, pyctx()->tp_NativeClass);
-			type_name = *(StringName *)py_touserdata(&argv[0]);
+			type_name = python_name_to_godot((py_Name)py_totrivial(&argv[0]));
 		} else {
 			return TypeError("expected 'type' or 'GDNativeClass', got '%t'", py_typeof(&argv[0]));
 		}
@@ -102,23 +102,18 @@ void setup_python_bindings() {
 			NULL);
 
 	// GDNativeClass
-	pyctx()->tp_NativeClass = py_newtype("GDNativeClass", tp_object, godot, [](void *ud) {
-		auto *self = (StringName *)ud;
-		self->~StringName();
-	});
+	pyctx()->tp_NativeClass = py_newtype("GDNativeClass", tp_object, godot, NULL);
 
-	py_Ref tmp = py_pushtmp();
-	StringName *ud = (StringName *)py_newobject(tmp, pyctx()->tp_NativeClass, 0, sizeof(StringName));
-	new (ud) StringName("Node");
-	py_setdict(godot, py_name("Node"), tmp);
-	py_pop();
+	py_TValue tmp;
+	py_newtrivial(&tmp, pyctx()->tp_NativeClass, 0, (py_i64)py_name("Node"));
+	py_setdict(godot, py_name("Node"), &tmp);
 
 	// Extends
 	py_bindfunc(godot, "Extends", [](int argc, py_Ref argv) -> bool {
 		auto ctx = &pyctx()->reloading_context;
 		PY_CHECK_ARGC(1);
 		PY_CHECK_ARG_TYPE(0, pyctx()->tp_NativeClass);
-		StringName nativeClass = *(StringName *)py_touserdata(&argv[0]);
+		StringName nativeClass = python_name_to_godot((py_Name)py_totrivial(argv));
 		ctx->extends = nativeClass;
 		py_assign(py_retval(), py_tpobject(pyctx()->tp_Script));
 		return true;
