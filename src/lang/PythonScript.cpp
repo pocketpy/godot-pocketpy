@@ -347,11 +347,17 @@ void PythonScript::_update_placeholder_exports(void *placeholder) const {
 	Dictionary default_values;
 	TypedArray<Dictionary> raw_properties = _get_script_property_list();
 	for (int i = 0; i < raw_properties.size(); i++) {
-		int type = raw_properties[i].get("type");
-		if (type == 0)
-			continue;
-		StringName name = raw_properties[i].get("name");
 		properties.append(raw_properties[i]);
+		int type = raw_properties[i].get("type");
+		int usage = raw_properties[i].get("usage");
+		if (type == 0 || usage & (PROPERTY_USAGE_GROUP | PROPERTY_USAGE_SUBGROUP | PROPERTY_USAGE_CATEGORY)) {
+			continue;
+		}
+
+		StringName name = raw_properties[i].get("name");
+		if (name.is_empty()) {
+			continue;
+		}
 		Variant val = _get_property_default_value(name);
 
 		if (val.get_type() == type) {
