@@ -246,7 +246,7 @@ class BuiltinClass:
     description: str | None = field(default=None)
 # https://github.com/godotengine/godot/blob/1b37dacc1842779fb0d03a5b09026f59c13744fc/core/extension/extension_api_dump.cpp#L893
 # builtins
-# contains all the builtin classes
+# contains all the builtin classes    
 @dataclass
 class BuiltinClasses:
     builtin_classes: list[BuiltinClass] = field(default_factory=list)
