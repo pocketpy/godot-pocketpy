@@ -105,7 +105,7 @@ void setup_python_bindings() {
 	pyctx()->tp_NativeClass = py_newtype("GDNativeClass", tp_object, godot, NULL);
 
 	py_TValue tmp;
-	py_newtrivial(&tmp, pyctx()->tp_NativeClass, 0, (py_i64)py_name("Node"));
+	py_newtrivial(&tmp, pyctx()->tp_NativeClass, (py_i64)py_name("Node"));
 	py_setdict(godot, py_name("Node"), &tmp);
 
 	// Extends
