@@ -1,75 +1,13 @@
 from dataclasses import dataclass, field, fields
 from enum import Enum
 import re
-from typing import Any, get_origin, get_args
+from typing import ClassVar
 
-DEBUG = True
-
-
-def validate_types_on_init(cls):
-    original_init = cls.__init__
-    
-    def __init__(self: Any, *args: Any, **kwargs: Any) -> None:
-        original_init(self, *args, **kwargs)
-        for field in fields(cls):
-            value = getattr(self, field.name)
-            field_type = field.type
-            
-            # 获取基础类型和泛型参数
-            origin_type = get_origin(field_type)
-            type_args = get_args(field_type)
-            
-            # 检查基础类型
-            check_type = origin_type if origin_type is not None else field_type
-            
-            # 跳过Any类型的检查
-            if check_type == Any:
-                continue
-                
-            # 检查值是否为正确的基础类型
-            if not isinstance(value, check_type):
-                raise TypeError(f"Expected {field.name} to be {field_type}, got {type(value)}")
-            
-            # 如果是容器类型且有类型参数，检查内部元素
-            if type_args and hasattr(value, "__iter__") and not isinstance(value, (str, bytes)):
-                # 对列表、集合等可迭代对象的每个元素进行类型检查
-                for i, item in enumerate(value):
-                    if not isinstance(item, type_args[0]):
-                        raise TypeError(f"Item {i} in {field.name} expected to be {type_args[0]}, got {type(item)}")
-            
-            # 对字典类型的特殊处理
-            elif type_args and isinstance(value, dict) and len(type_args) == 2:
-                for k, v in value.items():
-                    if not isinstance(k, type_args[0]):
-                        raise TypeError(f"Dict key in {field.name} expected to be {type_args[0]}, got {type(k)}")
-                    if not isinstance(v, type_args[1]):
-                        raise TypeError(f"Dict value for key {k} in {field.name} expected to be {type_args[1]}, got {type(v)}")
-    
-    cls.__init__ = __init__
-    return cls
-
-
-class ValidatorResults():
-    def __init__(self) -> None:
-        self.results = []
-    
-    def append(self, result: bool) -> None:
-        if DEBUG:
-            if not result:
-                raise ValueError(f"Validation failed")
-        
-        self.results.append(result)
-        
-    def result(self) -> bool:
-        return all(self.results)
+from .tools import validate_types_on_init, ValidatorResults
+from .schema_gdt import GodotInOne
 
 
 
-
-class _PyTypeCategory(Enum):
-    CAN_TRANSFER_TO_PY_BUILTIN = "CAN_TRANSFER_TO_PY_BUILTIN"
-    GODOT_NATIVE = "GODOT_NATIVE"
-    ENUM = "ENUM"
 class PyTypeCategory(Enum):
     CAN_TRANSFER_TO_PY_BUILTIN = "CAN_TRANSFER_TO_PY_BUILTIN"
     GODOT_NATIVE = "GODOT_NATIVE"
@@ -83,9 +21,6 @@ class PyType:
     '''
     一个python类型
     '''
-    name: str
-    _category: _PyTypeCategory = field(default=None, init=False)
-    inherit: 'PyType' | None = field(default=None)
     
     
     # src\lang\Common.cpp
@@ -114,55 +49,115 @@ class PyType:
     # 		}
     # 	}
     # }
-    BUILTIN_TYPES = {"Nil":'None', "int":'int', "float":'float', "bool":'bool', "String":'str'}
-    SINGLETON_TYPES: set['PyType']
-    NOT_SINGLETON_TYPES: set['PyType']
+    name: str
+    BUILTIN_TYPES: ClassVar[dict[str, str]] = {"Nil":'None', "int":'int', "float":'float', "bool":'bool', "String":'str'}
+    
+    ALL_TYPES: ClassVar[dict[str, 'PyType']] = {}
+    
+    
+    # Type categorization sets
+    CAN_TRANSFER_TO_PY_BUILTIN_TYPES: ClassVar[set['PyType']] = set()
+    GODOT_NATIVE_TYPES: ClassVar[set['PyType']] = set()
+    ENUM_TYPES: ClassVar[set['PyType']] = set()
+    SINGLETON_GODOT_NATIVE_TYPES: ClassVar[set['PyType']] = set()
+    
+    inherit: 'PyType | None' = field(default=None)
+    
+    def __hash__(self) -> int:
+        return hash(self.name)
+    
+    def __eq__(self, other):
+        if not isinstance(other, PyType):
+            return False
+        return self.name == other.name
     
     @classmethod
-    def add_singleton_type(cls, pytype: 'PyType') -> None:
-        if cls.SINGLETON_TYPES is None:
-            cls.SINGLETON_TYPES = set()
-        cls.SINGLETON_TYPES.add(pytype)
+    def get(cls, name: str) -> 'PyType':
+        '''
+        根据名字获取PyType
+        '''
+        name = name.replace('.', "__")
+        name = name.replace('enum::', "")
+        name = name.replace('bitfield::', "")
+        pytype = PyType.ALL_TYPES[name]
+        return pytype
+    
     @classmethod
-    def add_not_singleton_type(cls, pytype: 'PyType') -> None:
-        if cls.NOT_SINGLETON_TYPES is None:
-            cls.NOT_SINGLETON_TYPES = set()
-        cls.NOT_SINGLETON_TYPES.add(pytype)
+    def add(cls, name: str, category: PyTypeCategory) -> None:
+        '''
+        添加一个PyType, 此处为系统收录类型的唯一门户, 注意保证name的干净
+        '''
 
-    @staticmethod
-    def is_singleton(pytype: 'PyType') -> bool:
-        if pytype not in PyType.SINGLETON_TYPES and pytype not in PyType.NOT_SINGLETON_TYPES:
-            raise ValueError(f"Singleton type not found: {pytype.name}")
+        name = name.replace('.', "__")
+        name = name.replace('enum::', "")
+        name = name.replace('bitfield::', "")
+
+        new_pytype = PyType(name=name)
+        if not PyType.validate(new_pytype):
+            raise ValueError(f"Invalid type: {name}")
         
-        if pytype in PyType.SINGLETON_TYPES:
-            return True
-        return False
+        cls.ALL_TYPES[name] = new_pytype
+        cls.add_type_to_category(new_pytype, category)
     
-    def __post_init__(self) -> None:
-        self.name = PyType.try_parse_name(self.name)
-        
-        if self.name in PyType.BUILTIN_TYPES:
-            self._category = PyTypeCategory.CAN_TRANSFER_TO_PY_BUILTIN
-            
-        elif self.name.startswith('enum::'):
-            self._category = PyTypeCategory.ENUM
-            
+    @classmethod
+    def add_type_to_category(cls, pytype: 'PyType', category: PyTypeCategory) -> None:
+        """
+        将一个PyType添加到指定的类别集合中
+        """
+        if category == PyTypeCategory.CAN_TRANSFER_TO_PY_BUILTIN:
+            cls.CAN_TRANSFER_TO_PY_BUILTIN_TYPES.add(pytype)
+        elif category == PyTypeCategory.GODOT_NATIVE:
+            cls.GODOT_NATIVE_TYPES.add(pytype)
+        elif category == PyTypeCategory.ENUM:
+            cls.ENUM_TYPES.add(pytype)
+        elif category == PyTypeCategory.SINGLETON_GODOT_NATIVE:
+            cls.SINGLETON_GODOT_NATIVE_TYPES.add(pytype)
         else:
-            self._category = PyTypeCategory.GODOT_NATIVE
+            raise ValueError(f"Invalid category: {category}")
         
+    
+    @classmethod
+    def build_type_map(cls, gdt_all_in_one: GodotInOne) -> None:
+        '''
+        从gdt_all_in_one构建PyType.ALL_TYPES
+        '''
+        for singleton_data in gdt_all_in_one.singletons:
+            cls.add(singleton_data.name, PyTypeCategory.SINGLETON_GODOT_NATIVE)
+        
+        for builtin_class in gdt_all_in_one.builtin_classes:
+            cls.add(builtin_class.name, PyTypeCategory.GODOT_NATIVE)
+        
+        for cls_data in gdt_all_in_one.classes:
+            
+            cls.add(cls_data.name, PyTypeCategory.GODOT_NATIVE)
+            
+            if cls_data.enums:
+                for enum_data in cls_data.enums:
+                    name = cls_data.name + '__' + enum_data.name
+                    cls.add(name, PyTypeCategory.ENUM)
+                    
+            cls.add(cls_data.name, PyTypeCategory.GODOT_NATIVE)
+        
+        for enum_data in gdt_all_in_one.global_enums:
+            cls.add(enum_data.name, PyTypeCategory.ENUM)
+
+        # inherits
+        for cls_data in gdt_all_in_one.classes:
+            if cls_data.inherits:
+                cls.get(cls_data.name).inherit = cls.get(cls_data.inherits)
+    
     @property
     def category(self) -> PyTypeCategory:
-        if self._category == _PyTypeCategory.CAN_TRANSFER_TO_PY_BUILTIN:
+        if self in PyType.CAN_TRANSFER_TO_PY_BUILTIN_TYPES:
             return PyTypeCategory.CAN_TRANSFER_TO_PY_BUILTIN
-        elif self._category == _PyTypeCategory.GODOT_NATIVE:
-            if PyType.is_singleton(self):
-                return PyTypeCategory.SINGLETON_GODOT_NATIVE
-            else:
-                return PyTypeCategory.GODOT_NATIVE
-        elif self._category == _PyTypeCategory.ENUM:
+        if self in PyType.SINGLETON_GODOT_NATIVE_TYPES:  # 优先级更高
+            return PyTypeCategory.SINGLETON_GODOT_NATIVE
+        if self in PyType.ENUM_TYPES:
             return PyTypeCategory.ENUM
-        else:
-            raise ValueError(f"Invalid type: {self.name}")
+        if self in PyType.GODOT_NATIVE_TYPES:
+            return PyTypeCategory.GODOT_NATIVE
+        
+        raise ValueError(f"Type {self.name} not found in any category")
     
     @staticmethod
     def try_parse_name(name: str) -> str:
@@ -192,7 +187,7 @@ class PyType:
             return type.name
         elif type.category == PyTypeCategory.ENUM:
             return type.name
-        elif type.category == PyTypeCategory.SINGLETON:
+        elif type.category == PyTypeCategory.SINGLETON_GODOT_NATIVE:
             return type.name
         else:
             raise ValueError(f"Invalid type: {type.name}")
@@ -200,7 +195,7 @@ class PyType:
     @staticmethod
     def validate(type: 'PyType') -> bool:
         results = ValidatorResults()
-        results.append(bool(re.fullmatch(r'[A-Za-z0-9]+', type.name)))
+        results.append(bool(re.fullmatch(r'[A-Za-z0-9_]+', type.name)))
         return results.result()
 
 @validate_types_on_init
@@ -336,7 +331,7 @@ class PyMethod:
         self.name = new_name
     
     @staticmethod
-    def try_parse_name(name: str) -> str|None:
+    def try_parse_name(name: str) -> str | None:
         
         # 运算符
         if name in PyMethod.OPERATORS_TABLE:
@@ -410,13 +405,17 @@ class PyMember:
     '''
     一个python属性(赋值语句), 包含名称, 类型, 内联注释
     '''
-    name: str
-    type_expr: PyTypeExpr
+    specified_string: str | None = field(default=None)  # 如果指定了字符串, 那么convert_to_string将直接返回这个字符串, 同时validate将返回True
+    name: str | None = field(default=None)
+    type_expr: PyTypeExpr | None = field(default=None)
     value_expr: PyValueExpr | None = field(default=None)
-    inline_comment: str = field(default="")
+    inline_comment: str|None = field(default=None)
     
     @staticmethod
     def convert_to_string(member: 'PyMember') -> str:
+        if member.specified_string is not None:
+            return member.specified_string
+        
         s = f'{member.name}: {PyTypeExpr.convert_to_string(member.type_expr)}'
         if member.value_expr:
             s += f' = {PyValueExpr.convert_to_string(member.value_expr)}'
@@ -427,6 +426,9 @@ class PyMember:
     @staticmethod
     def validate(member: 'PyMember') -> bool:
         results = ValidatorResults()
+        if member.specified_string is not None:
+            return True
+        
         if member.type_expr:
             results.append(PyTypeExpr.validate(member.type_expr))
         else:
@@ -453,7 +455,7 @@ class PyClass:
     '''
     一个python类, 包含类型, 描述, 成员, 类属性, 方法
     '''
-    type_expr: PyTypeExpr
+    type: PyType
     description_lines: list[str] = field(default_factory=list)
     
     members: list[PyMember] = field(default_factory=list)
@@ -474,7 +476,7 @@ class PyClass:
         
         # class xxx(xxx):
         if pyclass.type.inherit:
-            lines.append(f'class {PyType.convert_to_string(pyclass.type)}({PyType.convert_to_string(pyclass.inherit)}):')
+            lines.append(f'class {PyType.convert_to_string(pyclass.type)}({PyType.convert_to_string(pyclass.type.inherit)}):')
         else:
             lines.append(f'class {PyType.convert_to_string(pyclass.type)}:')
         
