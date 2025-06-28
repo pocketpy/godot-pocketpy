@@ -3,8 +3,9 @@ from enum import Enum
 import re
 from typing import ClassVar
 
-from .tools import validate_types_on_init, ValidatorResults
+from .tools import validate_types_on_init, ValidatorResults, DEBUG
 from .schema_gdt import GodotInOne
+from keyword import iskeyword
 
 
 
@@ -13,13 +14,17 @@ class PyTypeCategory(Enum):
     GODOT_NATIVE = "GODOT_NATIVE"
     ENUM = "ENUM"
     SINGLETON_GODOT_NATIVE = "SINGLETON_GODOT_NATIVE"
+    IGNORE = "IGNORE"
+
+
+
 
 
 @validate_types_on_init
 @dataclass
 class PyType:
     '''
-    一个python类型
+    一个python原子类型
     '''
     
     
@@ -50,16 +55,23 @@ class PyType:
     # 	}
     # }
     name: str
-    BUILTIN_TYPES: ClassVar[dict[str, str]] = {"Nil":'None', "int":'int', "float":'float', "bool":'bool', "String":'str'}
+        
+    COMPATIBLE_TYPES_MAP: ClassVar[dict[str, str]] = {"Nil":'None', "int":'int', "float":'float', "bool":'bool', "String":'str'}    
     
     ALL_TYPES: ClassVar[dict[str, 'PyType']] = {}
     
     
     # Type categorization sets
-    CAN_TRANSFER_TO_PY_BUILTIN_TYPES: ClassVar[set['PyType']] = set()
+    COMPATIBLE_TYPES: ClassVar[set['PyType']] = set()
     GODOT_NATIVE_TYPES: ClassVar[set['PyType']] = set()
     ENUM_TYPES: ClassVar[set['PyType']] = set()
     SINGLETON_GODOT_NATIVE_TYPES: ClassVar[set['PyType']] = set()
+    IGNORE_TYPES: ClassVar[set['PyType']] = set()
+    # 支持泛型的类型
+    SUPPORT_GENERIC_TYPES: ClassVar[set['PyType']] = set()
+    
+    # 子类查找缓存
+    _SUBCLASSES_CACHE: ClassVar[dict[str, list['PyType']]] = {}
     
     inherit: 'PyType | None' = field(default=None)
     
@@ -72,13 +84,28 @@ class PyType:
         return self.name == other.name
     
     @classmethod
-    def get(cls, name: str) -> 'PyType':
+    def get(cls, name: str, raise_error: bool = True) -> 'PyType | None':
         '''
-        根据名字获取PyType
+        根据名字获取PyType, 设计时只允许用来获取原子类型
         '''
-        name = name.replace('.', "__")
-        name = name.replace('enum::', "")
-        name = name.replace('bitfield::', "")
+        name = PyType.try_parse_name(name)
+        if name not in PyType.ALL_TYPES:
+            if raise_error:
+                # 按首字母分组打印类型名
+                type_names = sorted(PyType.ALL_TYPES.keys())
+                grouped_types = {}
+                for type_name in type_names:
+                    first_letter = type_name[0].upper()
+                    if first_letter not in grouped_types:
+                        grouped_types[first_letter] = []
+                    grouped_types[first_letter].append(type_name)
+                
+                error_msg = f"Type not found: {name}\n\tALL_TYPES:\n"
+                for letter in sorted(grouped_types.keys()):
+                    error_msg += f"\t{letter}: {', '.join(grouped_types[letter])}\n"
+                
+                raise ValueError(error_msg.rstrip())
+            return None
         pytype = PyType.ALL_TYPES[name]
         return pytype
     
@@ -87,17 +114,18 @@ class PyType:
         '''
         添加一个PyType, 此处为系统收录类型的唯一门户, 注意保证name的干净
         '''
-
-        name = name.replace('.', "__")
-        name = name.replace('enum::', "")
-        name = name.replace('bitfield::', "")
-
+        name = PyType.try_parse_name(name)
         new_pytype = PyType(name=name)
         if not PyType.validate(new_pytype):
             raise ValueError(f"Invalid type: {name}")
         
         cls.ALL_TYPES[name] = new_pytype
-        cls.add_type_to_category(new_pytype, category)
+        
+        # 强制识别并添加内置类型, 而不是将内置类型传入期望的类别
+        if name in cls.COMPATIBLE_TYPES_MAP or name in cls.COMPATIBLE_TYPES_MAP.values():
+            cls.add_type_to_category(new_pytype, PyTypeCategory.CAN_TRANSFER_TO_PY_BUILTIN)
+        else:
+            cls.add_type_to_category(new_pytype, category)
     
     @classmethod
     def add_type_to_category(cls, pytype: 'PyType', category: PyTypeCategory) -> None:
@@ -105,28 +133,72 @@ class PyType:
         将一个PyType添加到指定的类别集合中
         """
         if category == PyTypeCategory.CAN_TRANSFER_TO_PY_BUILTIN:
-            cls.CAN_TRANSFER_TO_PY_BUILTIN_TYPES.add(pytype)
+            cls.COMPATIBLE_TYPES.add(pytype)
         elif category == PyTypeCategory.GODOT_NATIVE:
             cls.GODOT_NATIVE_TYPES.add(pytype)
         elif category == PyTypeCategory.ENUM:
             cls.ENUM_TYPES.add(pytype)
         elif category == PyTypeCategory.SINGLETON_GODOT_NATIVE:
             cls.SINGLETON_GODOT_NATIVE_TYPES.add(pytype)
+        elif category == PyTypeCategory.IGNORE:
+            cls.IGNORE_TYPES.add(pytype)
         else:
             raise ValueError(f"Invalid category: {category}")
         
     
     @classmethod
-    def build_type_map(cls, gdt_all_in_one: GodotInOne) -> None:
+    def get_subclasses(cls, base_type: 'PyType') -> list['PyType']:
+        '''
+        返回所有继承自 base_type 的 PyType 列表
+        '''
+        # 检查缓存中是否已有结果
+        if base_type.name in cls._SUBCLASSES_CACHE:
+            return cls._SUBCLASSES_CACHE[base_type.name]
+            
+        subclasses = []
+        
+        # 直接子类
+        direct_subclasses = [t for t in cls.ALL_TYPES.values() if t.inherit == base_type]
+        
+        # 递归查找所有子类
+        for subclass in direct_subclasses:
+            subclasses.append(subclass)
+            # 递归获取子类的子类
+            subclasses.extend(cls.get_subclasses(subclass))
+        
+        # 将结果存入缓存
+        cls._SUBCLASSES_CACHE[base_type.name] = subclasses
+        
+        return subclasses
+        
+    @classmethod
+    def build_type_sets(cls, gdt_all_in_one: GodotInOne) -> None:
         '''
         从gdt_all_in_one构建PyType.ALL_TYPES
         '''
+        # 支持泛型的类型
+        for name in ['Array']:
+            cls.ALL_TYPES[name] = PyType(name=name)
+            cls.SUPPORT_GENERIC_TYPES.add(cls.get(name))
+        
+        # Variant
+        cls.add('Variant', PyTypeCategory.CAN_TRANSFER_TO_PY_BUILTIN)
+        
+        # intptr
+        cls.add('intptr', PyTypeCategory.IGNORE)
+        
+        # Enum
+        cls.add('Enum', PyTypeCategory.GODOT_NATIVE)
+        
+        # 单例类型
         for singleton_data in gdt_all_in_one.singletons:
             cls.add(singleton_data.name, PyTypeCategory.SINGLETON_GODOT_NATIVE)
         
+        # 内置类型
         for builtin_class in gdt_all_in_one.builtin_classes:
             cls.add(builtin_class.name, PyTypeCategory.GODOT_NATIVE)
         
+        # 枚举和内置
         for cls_data in gdt_all_in_one.classes:
             
             cls.add(cls_data.name, PyTypeCategory.GODOT_NATIVE)
@@ -135,20 +207,48 @@ class PyType:
                 for enum_data in cls_data.enums:
                     name = cls_data.name + '__' + enum_data.name
                     cls.add(name, PyTypeCategory.ENUM)
+                    cls.get(name).inherit = cls.get("Enum")
                     
             cls.add(cls_data.name, PyTypeCategory.GODOT_NATIVE)
         
+        
+        # @dataclass
+        # class BuiltinClassEnumValue:
+        #     name: str
+        #     value: int
+        #     description: str | None
+        # # https://github.com/godotengine/godot/blob/1b37dacc1842779fb0d03a5b09026f59c13744fc/core/extension/extension_api_dump.cpp#L704
+        # # name and other properties of an enum
+        # #     
+        # @dataclass
+        # class BuiltinClassEnum:
+        #     name: str
+        #     description: str | None
+        #     values: list[BuiltinClassEnumValue] | None= field(default_factory=list)
+        for builtin_cls_data in gdt_all_in_one.builtin_classes:
+            if builtin_cls_data.enums:
+                for enum_data in builtin_cls_data.enums:
+                    name = builtin_cls_data.name + '__' + enum_data.name
+                    cls.add(name, PyTypeCategory.ENUM)
+                    cls.get(name).inherit = cls.get("Enum")
+
+        
         for enum_data in gdt_all_in_one.global_enums:
             cls.add(enum_data.name, PyTypeCategory.ENUM)
+            cls.get(enum_data.name).inherit = cls.get("Enum")
 
-        # inherits
+        # 继承
         for cls_data in gdt_all_in_one.classes:
             if cls_data.inherits:
                 cls.get(cls_data.name).inherit = cls.get(cls_data.inherits)
     
     @property
+    def is_support_generic(self) -> bool:
+        return self in PyType.SUPPORT_GENERIC_TYPES
+    
+    @property
     def category(self) -> PyTypeCategory:
-        if self in PyType.CAN_TRANSFER_TO_PY_BUILTIN_TYPES:
+        if self in PyType.COMPATIBLE_TYPES:
             return PyTypeCategory.CAN_TRANSFER_TO_PY_BUILTIN
         if self in PyType.SINGLETON_GODOT_NATIVE_TYPES:  # 优先级更高
             return PyTypeCategory.SINGLETON_GODOT_NATIVE
@@ -156,47 +256,76 @@ class PyType:
             return PyTypeCategory.ENUM
         if self in PyType.GODOT_NATIVE_TYPES:
             return PyTypeCategory.GODOT_NATIVE
-        
+        if self in PyType.IGNORE_TYPES:
+            return PyTypeCategory.IGNORE
         raise ValueError(f"Type {self.name} not found in any category")
     
     @staticmethod
-    def try_parse_name(name: str) -> str:
+    def try_parse_name(name: str, raise_error: bool = True) -> str|None:
         '''
         尝试转换name
         '''
         # 内置类型
-        if name in PyType.BUILTIN_TYPES:
-            return PyType.BUILTIN_TYPES[name]
+        if name in PyType.COMPATIBLE_TYPES_MAP:
+            return PyType.COMPATIBLE_TYPES_MAP[name]
         
         # 枚举类型
         if name.startswith('enum::'):
             return name.replace('enum::', '').replace('.', "__")
         
+        # 也是枚举类型, 包含"."但是不包含"::"的类型
+        if '.' in name and '::' not in name:
+            return name.replace('.', "__")
+        
+        # 位域类型
+        if name.startswith('bitfield::'):
+            return name.replace('bitfield::', '').replace('.', "__")
+        
+        # typedarray
+        if name.startswith('typedarray::'):
+            return "Array"
+        
         # 正常类型(名字合法的内置类型和原生类型)
-        if bool(re.fullmatch(r'[A-Za-z0-9]+', name)):
+        if bool(re.fullmatch(r'[A-Za-z0-9_]+', name)):
             return name
         
+        # 引用类型的指针(intptr)
+        # "xxx*" / "xxx**"
+        if bool(re.fullmatch(r'[A-Za-z0-9_]*\s?\*\*?', name)):
+            return 'intptr'
+        # "const xxx*" / "const xxx**"
+        if bool(re.fullmatch(r'const [A-Za-z0-9_]*\s?\*\*?', name)):
+            return 'intptr'
+        # "xxx,xxx*" / "xxx,xxx**"
+        if bool(re.fullmatch(r'[A-Za-z0-9_]+\.[A-Za-z0-9_]*\s?\*\*?', name)):
+            return 'intptr'
+        # const xxx.xxx* / const xxx.xxx**
+        if bool(re.fullmatch(r'const [A-Za-z0-9_]+\.[A-Za-z0-9_]*\s?\*\*?', name)):
+            return 'intptr'
+        
         # 无法转换的类型
-        raise ValueError(f"Invalid type: {name}")
+        if name.startswith('Signal'):
+            raise ValueError(f"Signal type is not supported, please use PyTypeExpr.get_and_add_specified('{name}')")
+        if raise_error:
+            raise ValueError(f"Unknown type: {name}")
+        return None
+    
     
     @staticmethod
-    def convert_to_string(type: 'PyType') -> str:
-        if type.category == PyTypeCategory.CAN_TRANSFER_TO_PY_BUILTIN:
-            return type.name
-        elif type.category == PyTypeCategory.GODOT_NATIVE:
-            return type.name
-        elif type.category == PyTypeCategory.ENUM:
-            return type.name
-        elif type.category == PyTypeCategory.SINGLETON_GODOT_NATIVE:
-            return type.name
+    def convert_to_string(pytype: 'PyType', wrap_with_single_quote: bool = True) -> str:
+        if wrap_with_single_quote:
+            return "'" + pytype.name + "'"
         else:
-            raise ValueError(f"Invalid type: {type.name}")
-        
+            return pytype.name
+    
     @staticmethod
-    def validate(type: 'PyType') -> bool:
+    def validate(pytype: 'PyType') -> bool:
         results = ValidatorResults()
-        results.append(bool(re.fullmatch(r'[A-Za-z0-9_]+', type.name)))
+        results.append(bool(re.fullmatch(r'[A-Za-z0-9_]+', pytype.name)))
         return results.result()
+
+
+
 
 @validate_types_on_init
 @dataclass
@@ -204,20 +333,153 @@ class PyTypeExpr:
     '''
     一个python类型表达式
     '''
-    type: PyType | None
-    expr: str
-
+    
+    composite_types: list[tuple|None] = field(default_factory=lambda: [None])  # tuple[PyType, tuple[PyType, tuple[PyType, ...] | None] | None] | None
+    specified_string: str | None = field(default=None)  # 如果指定了字符串, 那么convert_to_string将直接返回这个字符串, 同时validate将返回True
+    
+    ALL_TYPE_EXPRS: ClassVar[dict[str, 'PyTypeExpr']] = {}
+    
+    @classmethod
+    def get(cls, expr: str) -> 'PyTypeExpr':
+        if expr in cls.ALL_TYPE_EXPRS:
+            return cls.ALL_TYPE_EXPRS[expr]
+        return cls(expr)
+    
     @staticmethod
-    def convert_to_string(expr: 'PyTypeExpr') -> str:
-        if expr.type:
-            return PyType.convert_to_string(expr.type)
-        return expr.expr
+    def try_parse_generic_expr(expr: str) -> tuple['PyType', str] | None:
+        
+        # 目前只有typedarray支持泛型
+        if expr.startswith('typedarray::'):
+            
+            # typedarray::21/9:xxx  --> Array[xxx]
+            if bool(re.fullmatch(r'typedarray::[0-9]*/[0-9]*:[A-Za-z0-9_]+', expr)):
+                return (PyType.get('Array'), expr.replace('typedarray::', '').replace(re.search(r'[0-9]*/[0-9]*:', expr).group(), ''))
+            
+            # typedarray::21/9:  --> Array
+            if bool(re.fullmatch(r'typedarray::[0-9]*/[0-9]*:', expr)):
+                return None
+            
+            # typedarray::xxx  --> Array[xxx]
+            return (PyType.get('Array'), expr.replace('typedarray::', ''))
+        
+            
+        
+        return None
+    
+    @staticmethod
+    def try_parse_union_expr(expr: str) -> list[str]:
+        return [sub_expr.strip() for sub_expr in expr.split(",")]
+    
+    @staticmethod
+    def _recursive_parse_type(origin_expr: str) -> list[tuple['PyType', str|None]]:
+        
+        generic_result = PyTypeExpr.try_parse_generic_expr(origin_expr)
+        if generic_result:
+            return [(generic_result[0], PyTypeExpr._recursive_parse_type(generic_result[1]))]  # 泛型类型, 继续递归
+        
+        union_exprs = PyTypeExpr.try_parse_union_expr(origin_expr)
+        
+        if len(union_exprs) == 1:
+            return [(PyType.get(origin_expr), None)]  # 原子类型, 停止递归
+        
+        union_results = []
+        
+        #  xxx, -aaa, -bbb, -ccc 模式
+        symbol_list = []
+        for union_expr in union_exprs:
+            if union_expr.startswith("-"):
+                symbol_list.append('-')
+            else:
+                symbol_list.append('+')
+        
+        # 检查是否为 "aaa,-bbb,-ccc" 模式
+        if symbol_list[0] == '+' and all(symbol == '-' for symbol in symbol_list[1:]):
+            # 排除模式：第一个是基类，其他都是要排除的子类
+            base_type = PyType.get(union_exprs[0])
+            all_subclasses = PyType.get_subclasses(base_type)
+            all_types = [base_type] + all_subclasses
+            
+            # 要排除的类型
+            exclude_types = [PyType.get(expr.lstrip('-')) for expr in union_exprs[1:]]
+            
+            # 过滤
+            filtered_types = [t for t in all_types if t not in exclude_types]
+            return [(t, None) for t in filtered_types]
+        else:
+            # 普通的联合类型 "aaa,bbb,ccc" 模式
+            for union_expr in union_exprs:
+                result = PyTypeExpr._recursive_parse_type(union_expr)
+                union_results.extend(result)
+        
+        return union_results  # 联合类型, 增加分支并继续递归
+        
+    
+    @classmethod
+    def get_and_add(cls, origin_expr: str) -> 'PyTypeExpr':
+        if origin_expr in cls.ALL_TYPE_EXPRS:
+            return PyTypeExpr.get(origin_expr)
+        
+        composite_types = PyTypeExpr._recursive_parse_type(origin_expr.strip())
+        cls.ALL_TYPE_EXPRS[origin_expr] = cls(composite_types)
+        return cls.get(origin_expr)
+    
+    @classmethod
+    def get_and_add_specified(cls, specified_string: str) -> 'PyTypeExpr':
+        if specified_string in cls.ALL_TYPE_EXPRS:
+            return PyTypeExpr.get(specified_string)
+        
+        cls.ALL_TYPE_EXPRS[specified_string] = cls(specified_string=specified_string)
+        return cls.get(specified_string)
+        
+    @staticmethod
+    def _recursive_convert_to_string(composite_types: list[tuple['PyType', list[tuple['PyType', list[tuple['PyType', list[tuple['PyType', ...] | None] | None] | None] | None] | None] | None]], wrap_with_single_quote: bool = True) -> str:
+        
+        
+        s = " | ".join([PyType.convert_to_string(composite_type[0], wrap_with_single_quote) if composite_type[1] is None else f"{PyType.convert_to_string(composite_type[0], wrap_with_single_quote)}[{PyTypeExpr._recursive_convert_to_string(composite_type[1], wrap_with_single_quote)}]" for composite_type in composite_types])
+        
+        return s
+        
+        
+    @staticmethod
+    def convert_to_string(pytype_expr: 'PyTypeExpr', wrap_with_single_quote: bool = True) -> str:
+        if pytype_expr.specified_string:
+            if wrap_with_single_quote:
+                return "'" + pytype_expr.specified_string + "'"
+            else:
+                return pytype_expr.specified_string
+        
+        return PyTypeExpr._recursive_convert_to_string(pytype_expr.composite_types, wrap_with_single_quote)
+    
+    @staticmethod
+    def is_type_match(pytype: 'PyType', pytype_expr: 'PyTypeExpr') -> bool:
+        if pytype_expr.specified_string:
+            raise ValueError(f"specified string --->{pytype_expr.specified_string}<--- is not supported")
+        
+        matched = []
+        for composite_type in pytype_expr.composite_types:
+            if pytype == composite_type[0] or pytype in PyType.get_subclasses(composite_type[0]):
+                matched.append(True)
+                break
+            else:
+                matched.append(False)
+        
+        return any(matched)
+    
+    
+    @staticmethod
+    def _recursive_validate(composite_type: tuple['PyType', tuple['PyType', tuple['PyType', ...] | None] | None]) -> bool:
+        if composite_type[1] is None:
+            return PyType.validate(composite_type[0])
+        return PyType.validate(composite_type[0]) and PyTypeExpr._recursive_validate(composite_type[1])
     
     @staticmethod
     def validate(expr: 'PyTypeExpr') -> bool:
         results = ValidatorResults()
-        if expr.type:
-            results.append(PyType.validate(expr.type))
+        
+        if expr.specified_string:
+            return True
+        
+        results.append(PyTypeExpr._recursive_validate(expr.composite_type))
         return results.result()
 
 
@@ -227,12 +489,42 @@ class PyValueExpr:
     '''
     一个python值(字面量)
     '''
-    expr: str
+    value_expr: str
     type_expr: PyTypeExpr | None
     
     @staticmethod
     def convert_to_string(value: 'PyValueExpr') -> str:
-        return value.expr
+        
+        if not value.type_expr:
+            raise ValueError(f"value expression --->{value.value_expr}<--- has no type")
+        
+        if value.value_expr == 'null':
+            return "default('''" + value.value_expr + "''')"
+        
+        if PyTypeExpr.is_type_match(PyType.get('int'), value.type_expr):
+            return value.value_expr
+        elif PyTypeExpr.is_type_match(PyType.get('float'), value.type_expr):
+            return value.value_expr
+        elif PyTypeExpr.is_type_match(PyType.get('str'), value.type_expr):
+            return value.value_expr
+        elif PyTypeExpr.is_type_match(PyType.get('StringName'), value.type_expr):
+            return "default('''" + value.value_expr + "''')"
+        elif PyTypeExpr.is_type_match(PyType.get('bool'), value.type_expr):
+            if value.value_expr.lower() == 'true':
+                return 'True'
+            elif value.value_expr.lower() == 'false':
+                return 'False'
+            else:
+                raise ValueError(f"value expression --->{value.value_expr}<--- is not a valid bool")
+        else:
+            
+            for enum_class in PyType.ENUM_TYPES:
+                if PyTypeExpr.is_type_match(enum_class, value.type_expr):
+                    return value.value_expr
+            else:
+                if DEBUG:
+                    print(f"Warning: value expression: --->{value.value_expr}<--- type: '{PyTypeExpr.convert_to_string(value.type_expr, wrap_with_single_quote=False)}' has not matched any type")
+                return "default('''" + value.value_expr + "''')"
     
     @staticmethod
     def validate(value: 'PyValueExpr') -> bool:
@@ -254,9 +546,12 @@ class PyArgument:
     
     @staticmethod
     def convert_to_string(argument: 'PyArgument') -> str:
+        keyword_underline = ""
+        if iskeyword(argument.name):
+            keyword_underline = "_"
         if argument.default_value:
-            return f"{argument.name}: {PyTypeExpr.convert_to_string(argument.type_expr)} = {PyValueExpr.convert_to_string(argument.default_value)}"
-        return f"{argument.name}: {PyTypeExpr.convert_to_string(argument.type_expr)}"
+            return f"{argument.name}{keyword_underline}: {PyTypeExpr.convert_to_string(argument.type_expr)} = {PyValueExpr.convert_to_string(argument.default_value)}"
+        return f"{argument.name}{keyword_underline}: {PyTypeExpr.convert_to_string(argument.type_expr)}"
     
     @staticmethod
     def validate(argument: 'PyArgument') -> bool:
@@ -288,7 +583,7 @@ class PyMethod:
     return_type_expr: PyTypeExpr | None = field(default=None)
     arguments: list[PyArgument] = field(default_factory=list)
     vararg_position: int | None = field(default=None)
-    return_value: PyValueExpr | None = field(default=None)
+    return_type_expr: PyTypeExpr | None = field(default=None)
     is_static: bool = False
     
     OPERATORS_TABLE = {
@@ -369,7 +664,10 @@ class PyMethod:
 
         return_type_expr = PyTypeExpr.convert_to_string(method.return_type_expr) if method.return_type_expr else "None"
         
-        lines.append(f'def {method.name}({", ".join(args_expr)}) -> {return_type_expr}:')
+        keyword_underline = ""
+        if iskeyword(method.name):
+            keyword_underline = "_"
+        lines.append(f'def {method.name}{keyword_underline}({", ".join(args_expr)}) -> {return_type_expr}:')
         
         # """description
         #
@@ -415,8 +713,10 @@ class PyMember:
     def convert_to_string(member: 'PyMember') -> str:
         if member.specified_string is not None:
             return member.specified_string
-        
-        s = f'{member.name}: {PyTypeExpr.convert_to_string(member.type_expr)}'
+        keyword_underline = ""
+        if iskeyword(member.name):
+            keyword_underline = "_"
+        s = f'{member.name}{keyword_underline}: {PyTypeExpr.convert_to_string(member.type_expr)}'
         if member.value_expr:
             s += f' = {PyValueExpr.convert_to_string(member.value_expr)}'
         if member.inline_comment:
@@ -462,6 +762,9 @@ class PyClass:
     class_attributes: list[PyMember] = field(default_factory=list)
     methods: list[PyMethod] = field(default_factory=list)
     
+    CLASS_NAME_ALIAS: ClassVar[dict[str, str]] = {"str":"String", "int": "Int", "float": "Float", "bool": "Bool"}
+    CLASS_IGNORED: ClassVar[set[str]] = {"None"}
+    
     @staticmethod
     def _is_empty_class(pyclass: 'PyClass') -> bool:
         return not pyclass.members and not pyclass.class_attributes and not pyclass.methods
@@ -474,11 +777,22 @@ class PyClass:
     def convert_to_lines(pyclass: 'PyClass') -> list[str]:
         lines = []
         
+        # 忽略某些类
+        class_name = PyType.convert_to_string(pyclass.type, wrap_with_single_quote=False)
+        if class_name in PyClass.CLASS_IGNORED:
+            if DEBUG:
+                print(f"Warning: Class '{class_name}' is ignored")
+            return []
+        
+        # 防止和python内置类型重名
+        if class_name in PyClass.CLASS_NAME_ALIAS:
+            class_name = PyClass.CLASS_NAME_ALIAS[class_name]
+            
         # class xxx(xxx):
         if pyclass.type.inherit:
-            lines.append(f'class {PyType.convert_to_string(pyclass.type)}({PyType.convert_to_string(pyclass.type.inherit)}):')
+            lines.append(f'class {class_name}({PyType.convert_to_string(pyclass.type.inherit, wrap_with_single_quote=False)}):')
         else:
-            lines.append(f'class {PyType.convert_to_string(pyclass.type)}:')
+            lines.append(f'class {class_name}:')
         
         
         # class xxx(xxx): ...
@@ -514,12 +828,17 @@ class PyClass:
         
         # class attributes
         for member in pyclass.class_attributes:
-            lines.append(PyMember.convert_to_string(member))
+            lines.append("    " + PyMember.convert_to_string(member))
+        lines.append('')
+        
+        # instance members
+        for member in pyclass.members:
+            lines.append("    " + PyMember.convert_to_string(member))
         lines.append('')
         
         # class methods
         for method in pyclass.methods:
-            lines.extend(PyMethod.convert_to_lines(method))
+            lines.extend([f'    {line}' for line in PyMethod.convert_to_lines(method)])
 
         return lines
     
@@ -553,8 +872,7 @@ class PyFile:
         lines = []
         
         # from xxx import xxx
-        for import_ in pyfile.imports:
-            lines.extend(pyfile.imports)
+        lines.extend(pyfile.imports)
         lines.append('')
         lines.append('')
         

@@ -68,13 +68,13 @@ def check_type_match(value, expected_type, field_name=""):
                 if arg_type is None and value is None:
                     return True
             # 枚举类型不在联合类型中
-            raise TypeError(f"Expected {field_name} to be one of {type_args}, got {type(value)}, value: {value}")
+            raise TypeError(f"Expected '{field_name}' to be one of {type_args}, got {type(value)}, value: {value}")
         
         # 处理直接的枚举类型检查
         if isinstance(expected_type, type) and issubclass(expected_type, Enum):
             if isinstance(value, expected_type) or expected_type.__name__ == type(value).__name__:
                 return True
-            raise TypeError(f"Expected {field_name} to be {expected_type}, got {type(value)}, value: {value}")
+            raise TypeError(f"Expected '{field_name}' to be {expected_type}, got {type(value)}, value: {value}")
     
     # 获取基础类型和泛型参数
     origin_type = get_origin(expected_type)
@@ -98,7 +98,7 @@ def check_type_match(value, expected_type, field_name=""):
     
     # 处理普通类型
     if not isinstance(value, check_type):
-        raise TypeError(f"Expected {field_name} to be {expected_type}, got {type(value)}, value: {value}")
+        raise TypeError(f"Expected '{field_name}' to be {expected_type}, got {type(value)}, value: {value}")
     
     return True
 
@@ -112,7 +112,7 @@ def check_union_type(value, type_args, field_name):
             if arg_type is None or arg_type is type(None):
                 return True
         # None不匹配任何类型参数
-        raise TypeError(f"Expected {field_name} to be one of {type_args}, got None")
+        raise TypeError(f"Expected '{field_name}' to be one of {type_args}, got None")
     
     # 特殊处理枚举值
     if isinstance(value, Enum):
@@ -139,16 +139,16 @@ def check_union_type(value, type_args, field_name):
             continue  # 继续检查下一个类型
     
     # 如果没有匹配到任何类型
-    raise TypeError(f"Expected {field_name} to be one of {type_args}, got {type(value)}, value: {value}")
+    raise TypeError(f"Expected '{field_name}' to be one of {type_args}, got {type(value)}, value: {value}")
 
 
 def check_enum_type(value, enum_type, field_name):
     """检查值是否为正确的枚举类型"""
     if isinstance(value, Enum):
         if not isinstance(value, enum_type):
-            raise TypeError(f"Expected {field_name} to be {enum_type}, got {type(value)}, value: {value}")
+            raise TypeError(f"Expected '{field_name}' to be {enum_type}, got {type(value)}, value: {value}")
     else:
-        raise TypeError(f"Expected {field_name} to be an Enum of type {enum_type}, got {type(value)}, value: {value}")
+        raise TypeError(f"Expected '{field_name}' to be an Enum of type {enum_type}, got {type(value)}, value: {value}")
     return True
 
 
@@ -156,7 +156,7 @@ def check_container_type(value, container_type, type_args, field_name):
     """检查容器类型及其内部元素"""
     # 检查容器本身的类型
     if not isinstance(value, container_type):
-        raise TypeError(f"Expected {field_name} to be {container_type}, got {type(value)}, value: {value}")
+        raise TypeError(f"Expected '{field_name}' to be {container_type}, got {type(value)}, value: {value}")
     
     # 如果没有类型参数，不需要检查内部元素
     if not type_args:
@@ -168,7 +168,7 @@ def check_container_type(value, container_type, type_args, field_name):
             try:
                 check_type_match(item, type_args[0], f"{field_name}[{i}]")
             except TypeError as e:
-                raise TypeError(f"Item {i} in {field_name}: {e}")
+                raise TypeError(f"Item {i} in '{field_name}': {e}")
     
     # 字典类型的特殊处理
     elif container_type == dict or container_type == Dict:
@@ -177,12 +177,12 @@ def check_container_type(value, container_type, type_args, field_name):
                 try:
                     check_type_match(k, type_args[0], f"{field_name}_key")
                 except TypeError as e:
-                    raise TypeError(f"Dict key in {field_name}: {e}")
+                    raise TypeError(f"Dict key in '{field_name}': {e}")
                 
                 try:
                     check_type_match(v, type_args[1], f"{field_name}[{k}]")
                 except TypeError as e:
-                    raise TypeError(f"Dict value for key {k} in {field_name}: {e}")
+                    raise TypeError(f"Dict value for key '{k}' in '{field_name}': {e}")
     
     return True
 

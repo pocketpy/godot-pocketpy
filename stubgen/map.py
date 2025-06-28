@@ -80,10 +80,7 @@ def _map_properties(cls_data: ClassesSingle|BuiltinClass, pyclass: PyClass) -> N
     for member_data in cls_data.properties or []:
         pyclass.members.append(PyMember(
             name=member_data.name,
-            type_expr=PyTypeExpr(
-                type=PyType.get(member_data.type),
-                expr=member_data.type,
-            ),
+            type_expr=PyTypeExpr.get_and_add(member_data.type),
             inline_comment=member_data.description,
         ))
 
@@ -96,18 +93,21 @@ def _map_methods(cls_data: ClassesSingle|BuiltinClass, pyclass: PyClass) -> None
         if description:
             description = '"""' + "\n".join(description) + "\n" + '"""'
             description = description.splitlines()
+        
+        if isinstance(cls_data, BuiltinClass):
+            py_return_type_expr = PyTypeExpr.get_and_add(method_data.return_type) if method_data.return_type else None
+        elif isinstance(cls_data, ClassesSingle):
+            py_return_type_expr = PyTypeExpr.get_and_add(method_data.return_value.type) if method_data.return_value else None
+        else:
+            raise ValueError(f"Invalid class type: {cls_data}")
+        
+        
         pyclass.methods.append(PyMethod(
             name=method_data.name,
             description_lines=description,
             arguments=[],
-            vararg_position=None if not method_data.is_vararg else len(method_data.arguments),
-            return_value=PyValueExpr(
-                expr=method_data.return_value.type,
-                type_expr=PyTypeExpr(
-                    type=PyType.get(method_data.return_value.type),
-                    expr=method_data.return_value.type,
-                ),
-            ) if method_data.return_value else None,
+            vararg_position=None if not method_data.is_vararg or method_data.arguments is None else len(method_data.arguments),
+            return_type_expr=py_return_type_expr,
             is_static=method_data.is_static,
         ))
         
@@ -118,38 +118,43 @@ def _map_method_arguments(method_data, pymethod: PyMethod) -> None:
     for argument_data in method_data.arguments or []:
         pymethod.arguments.append(PyArgument(
             name=argument_data.name,
-            type_expr=PyTypeExpr(
-                type=PyType.get(argument_data.type),
-                expr=argument_data.type,
-            ),
+            type_expr=PyTypeExpr.get_and_add(argument_data.type),
             default_value=PyValueExpr(
-                expr=argument_data.default_value,
-                type_expr=PyTypeExpr(
-                    type=PyType.get(argument_data.type),
-                    expr=argument_data.type,
-                ),
+                value_expr=argument_data.default_value,
+                type_expr=PyTypeExpr.get_and_add(argument_data.type),
             ) if argument_data.default_value else None,
         ))
 
 def _map_constants(cls_data: ClassesSingle|BuiltinClass, pyclass: PyClass) -> None:
     """映射类常量/类属性"""
     for class_attribute_data in cls_data.constants or []:
-        pyclass.members.append(
-            PyMember(
-                name=class_attribute_data.name,
-                type_expr=PyTypeExpr(
-                    type=PyType.get('int'),
-                    expr=str(class_attribute_data.value),
-                ),
-                value_expr=PyValueExpr(
-                    expr=str(class_attribute_data.value),
-                    type_expr=PyTypeExpr(
-                        type=PyType.get('int'),
-                        expr=str(class_attribute_data.value),
+        # 判断类型分别处理
+        if hasattr(class_attribute_data, "type"):
+            # BuiltinClassConstant
+            pyclass.members.append(
+                PyMember(
+                    name=class_attribute_data.name,
+                    type_expr=PyTypeExpr.get_and_add(str(class_attribute_data.type)),
+                    value_expr=PyValueExpr(
+                        value_expr=str(class_attribute_data.value),
+                        type_expr=PyTypeExpr.get_and_add(str(class_attribute_data.type)),
                     ),
-                ),
+                    inline_comment=class_attribute_data.description if hasattr(class_attribute_data, "description") else None,
+                )
             )
-        )
+        else:
+            # ClassesConstant
+            pyclass.members.append(
+                PyMember(
+                    name=class_attribute_data.name,
+                    type_expr=PyTypeExpr.get_and_add("int"),
+                    value_expr=PyValueExpr(
+                        value_expr=str(class_attribute_data.value),
+                        type_expr=PyTypeExpr.get_and_add("int"),
+                    ),
+                    inline_comment=class_attribute_data.description if hasattr(class_attribute_data, "description") else None,
+                )
+            )
 
 
 # ===============================
@@ -163,23 +168,24 @@ def _map_signals(cls_data: ClassesSingle, pyclass: PyClass) -> None:
         arg_types = []
         arg_comments = []
         
-        for arg in signal_data.arguments:
-            arg_types.append(arg.type)
+        for arg in signal_data.arguments or []:
+            arg_types.append(PyTypeExpr.get_and_add(arg.type))
             arg_comments.append(f"{arg.name}: {arg.type}")
         
         # 创建信号类型表达式
-        signal_type_expr = f"Signal[Callable[[{', '.join(arg_types)}], None]]"
+        signal_type_expr = f"Signal[Callable[[{', '.join([PyTypeExpr.convert_to_string(arg_type, wrap_with_single_quote=False) for arg_type in arg_types])}], None]]"
         comment = f"{signal_data.name}({', '.join(arg_comments)})"
         
         # 添加信号成员
-        replaced_description = signal_data.description.replace('\n', '    ')
-        signal_desc = f"{comment} - {replaced_description}" if replaced_description else comment
+        if signal_data.description:
+            replaced_description = signal_data.description.replace('\n', '    ')
+            signal_desc = f"{comment} - {replaced_description}" if replaced_description else comment
+        else:
+            signal_desc = comment
+        
         pyclass.members.append(PyMember(
             name=signal_data.name,
-            type_expr=PyTypeExpr(
-                type=None,  # 信号类型是复合类型，不在 type_map 中
-                expr=signal_type_expr,
-            ),
+            type_expr=PyTypeExpr.get_and_add_specified(signal_type_expr),
             inline_comment=signal_desc
         ))
         
@@ -193,52 +199,32 @@ def _map_operators(cls_data: BuiltinClass, pyclass: PyClass) -> None:
 					name=PyMethod.OPERATORS_TABLE[operator_data.name],
 					arguments=[PyArgument(
 					name=operator_data.right_type,
-					type_expr=PyTypeExpr(
-						type=PyType.get(operator_data.right_type),
-						expr=operator_data.right_type,
-						),
+					type_expr=PyTypeExpr.get_and_add(operator_data.right_type),
 					)],
-					return_value=PyValueExpr(
-						expr=operator_data.return_type,
-						type_expr=PyTypeExpr(
-							type=PyType.get(operator_data.return_type),
-							expr=operator_data.return_type,
-						),
-					),
-					description_lines=operator_data.description.splitlines(),
+					return_type_expr=PyTypeExpr.get_and_add(operator_data.return_type),
+					description_lines=operator_data.description.splitlines() if operator_data.description else [],
 				))
             else:
                 # 一元运算符（如 __neg__、__invert__ 等），没有 right_type
                 pyclass.methods.append(PyMethod(
                     name=PyMethod.OPERATORS_TABLE[operator_data.name],
                     arguments=[],
-                    return_value=PyValueExpr(
-                        expr=operator_data.return_type,
-                        type_expr=PyTypeExpr(
-                            type=PyType.get(operator_data.return_type),
-                            expr=operator_data.return_type,
-                        ),
-                    ),
-                    description_lines=operator_data.description.splitlines(),
+                    return_type_expr=PyTypeExpr.get_and_add(operator_data.return_type),
+                    description_lines=operator_data.description.splitlines() if operator_data.description else [],
                 ))
         else:
-            raise Exception(f"发现新的运算符: {operator_data.name}")
+            if DEBUG:
+                print(f"Warning: 不支持的运算符: '{operator_data.name}' 在 '{cls_data.name}' ")
 
-def _map_enum(enum_data: GlobalEnum|ClassesEnum, pyclass: PyClass) -> None:
-    """映射枚举"""
+def _map_enum(enum_data: GlobalEnum|ClassesEnum|BuiltinClassEnum, pyclass: PyClass) -> None:
+    """映射枚举类型"""
     for enum_value_data in enum_data.values or []:
-        pyclass.members.append(PyMember(
+        pyclass.class_attributes.append(PyMember(
             name=enum_value_data.name,
-            type_expr=PyTypeExpr(
-                type=PyType.get('int'),
-                expr='int',
-            ),
+            type_expr=PyTypeExpr.get_and_add('int'),
             value_expr=PyValueExpr(
-                expr=str(enum_value_data.value),
-                type_expr=PyTypeExpr(
-                    type=PyType.get('int'),
-                    expr='int',
-                ),
+                value_expr=str(enum_value_data.value),
+                type_expr=PyTypeExpr.get_and_add('int'),
             ),
             inline_comment=enum_value_data.description,
         ))
@@ -255,13 +241,18 @@ class MapResult:
     
     
 def map_gdt_to_py(gdt_all_in_one: GodotInOne) -> MapResult:
-    PyType.build_type_map(gdt_all_in_one)
+    PyType.build_type_sets(gdt_all_in_one)
     
     map_result = MapResult(
         typings_pyi=PyFile(
             name="typings.pyi",
             imports=[
-            '''from typing import Callable'''
+            '''from typing import Callable''',
+            '''from typing import Any''',
+            'from .enum import *',
+            "",
+            "",
+            'def default(gdt_expr: str) -> Any: ...',
             ],
             classes=[],
         ),
@@ -278,17 +269,17 @@ def map_gdt_to_py(gdt_all_in_one: GodotInOne) -> MapResult:
             'from . import typings as _typings',
             '',
             '',
-            'class GDNativeSingleton[T: Object]:',
+            'class GDNativeSingleton[T: _typings.Object]:',
             '    def __init__(self, name: str): ...',
             '',
-            'class GDNativeClass[T: Object]:',
+            'class GDNativeClass[T: _typings.Object]:',
             '    def __init__(self, name: str): ...',
             '',
-            'class Script[T: Object]:',
+            'class Script[T: _typings.Object]:',
             '    @property',
-            '        def owner(self) -> T: ...',
+            '    def owner(self) -> T: ...',
             '',
-            'def Extends[T: Object](cls: GDNativeClass[T]) -> type[Script[T]]: ...',
+            'def Extends[T: _typings.Object](cls: GDNativeClass[T]) -> type[Script[T]]: ...',
             ],
             global_variables=[
             ]
@@ -349,15 +340,41 @@ def map_gdt_to_py(gdt_all_in_one: GodotInOne) -> MapResult:
         _map_methods(cls_data, pyclass)
         _map_constants(cls_data, pyclass)
         _map_operators(cls_data, pyclass)
-        
+                
         builtin_classes.append(pyclass)
     
+    # ===============================
     # enum
-    folded_enums = [gdt_all_in_one.global_enums] + [cls_data.enums for cls_data in gdt_all_in_one.classes]
-    flattened_enums = [item for sublist in folded_enums for item in sublist]
+    # ===============================
+    # --- global enum ---
+    enum_classes = []
+    for enum_data in gdt_all_in_one.global_enums:
+        description = []
+        if enum_data.description:
+            description.append(enum_data.description)
+        if description:
+            description = '"""' + "\n" + "\n".join(description) + "\n" + '"""'
+            description = description.splitlines()
+        
+        pyclass = PyClass(
+            type=PyType.get(enum_data.name),
+            description_lines=description,
+            members=[],
+            class_attributes=[],
+            methods=[],
+        )
+        
+        _map_enum(enum_data, pyclass)
+        enum_classes.append(pyclass)
+    
+    map_result.enum_pyi.classes.extend(enum_classes)
+    
+    # --- classes enum ---
+    folded_enums = [(cls_data.name, cls_data.enums) for cls_data in gdt_all_in_one.classes]
+    flattened_enums = [(cls_name, enum_data) for cls_name, enums in folded_enums for enum_data in enums or []]
     
     enum_classes = []
-    for enum_data in flattened_enums:
+    for cls_name, enum_data in flattened_enums:
         description = []
         if enum_data.description:
             description.append(enum_data.description)
@@ -366,7 +383,7 @@ def map_gdt_to_py(gdt_all_in_one: GodotInOne) -> MapResult:
             description = description.splitlines()
             
         pyclass = PyClass(
-            type=PyType.get(enum_data.name),
+            type=PyType.get(cls_name + '__' + enum_data.name),
             description_lines=description,
             members=[],
             class_attributes=[],
@@ -380,11 +397,38 @@ def map_gdt_to_py(gdt_all_in_one: GodotInOne) -> MapResult:
     map_result.enum_pyi.classes.extend(enum_classes)
     
     
+    # --- builtin class enum ---
+    folded_enums = [(cls_data.name, cls_data.enums) for cls_data in gdt_all_in_one.builtin_classes]
+    flattened_enums = [(cls_name, enum_data) for cls_name, enums in folded_enums for enum_data in enums or []]
+    enum_classes = []
+    for cls_name, enum_data in flattened_enums:
+        description = []
+        if enum_data.description:
+            description.append(enum_data.description)
+        if description:
+            description = '"""' + "\n" + "\n".join(description) + "\n" + '"""'
+            description = description.splitlines()
+
+        pyclass = PyClass(
+            type=PyType.get(cls_name + '__' + enum_data.name),
+            description_lines=description,
+            members=[],
+            class_attributes=[],
+            methods=[],
+        )
+        
+        _map_enum(enum_data, pyclass)
+        enum_classes.append(pyclass)
+    
+    map_result.enum_pyi.classes.extend(enum_classes)
+    
+    # ===============================
     # __init__.pyi
+    # ===============================
     #
     #   Resource = GDNativeClass[_typings.Resource]('Resource')
     #   Engine = GDNativeSingleton[_typings.Engine]('Engine')
-    for pytype in PyType.ALL_TYPES:
+    for pytype in PyType.ALL_TYPES.values():
         if pytype.category == PyTypeCategory.SINGLETON_GODOT_NATIVE:
             map_result.init_pyi.global_variables.append(PyMember(
                 specified_string=f'{pytype.name} = GDNativeSingleton[_typings.{pytype.name}](\'{pytype.name}\')',
@@ -394,16 +438,35 @@ def map_gdt_to_py(gdt_all_in_one: GodotInOne) -> MapResult:
                 specified_string=f'{pytype.name} = GDNativeClass[_typings.{pytype.name}](\'{pytype.name}\')',
             ))
     
+    # ===============================
     # enum.pyi
+    # ===============================
     for enum_class in enum_classes:
         map_result.enum_pyi.classes.append(enum_class)
     
+    # ===============================
     # typings.pyi
+    # ===============================
     for class_single_class in class_single_classes:
         map_result.typings_pyi.classes.append(class_single_class)
     
     for builtin_class in builtin_classes:
         map_result.typings_pyi.classes.append(builtin_class)
     
+    #   Variant
+    pyclass = PyClass(
+        type=PyType.get('Variant'),
+        description_lines=[],
+        members=[],
+        class_attributes=[],
+        methods=[],
+    )
+    map_result.typings_pyi.classes.append(pyclass)
+    
+    #   intptr
+    map_result.typings_pyi.global_variables.append(PyMember(
+        specified_string='intptr = int',
+        inline_comment='intptr is a pointer to an unknown type (const void*)',
+    ))
     
     return map_result
