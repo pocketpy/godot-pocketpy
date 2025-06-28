@@ -156,7 +156,7 @@ class UtilityFunctions:
 class BuiltinClassOperator:
     name: str
     right_type: str
-    return_type: bool
+    return_type: str   # 勘误,应该是str    d2["return_type"] = get_builtin_or_variant_type_name(Variant::get_operator_return_type(Variant::Operator(k), type, Variant::Type(j)));
     description: str | None
 # https://github.com/godotengine/godot/blob/1b37dacc1842779fb0d03a5b09026f59c13744fc/core/extension/extension_api_dump.cpp#L654
 # a member of the class    
