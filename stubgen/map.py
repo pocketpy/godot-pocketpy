@@ -247,12 +247,12 @@ def map_gdt_to_py(gdt_all_in_one: GodotInOne) -> MapResult:
         typings_pyi=PyFile(
             name="typings.pyi",
             imports=[
-            '''from typing import Callable''',
-            '''from typing import Any''',
+            
+            '''import typing''',
             'from .enum import *',
             "",
             "",
-            'def default(gdt_expr: str) -> Any: ...',
+            'def default(gdt_expr: str) -> typing.Any: ...',
             ],
             classes=[],
         ),
@@ -272,7 +272,7 @@ def map_gdt_to_py(gdt_all_in_one: GodotInOne) -> MapResult:
             'class GDNativeSingleton[T: _typings.Object]:',
             '    def __init__(self, name: str): ...',
             '',
-            'class GDNativeClass[T: _typings.Object]:',
+            'class GDNativeClass[T: _typings.Variant]:',
             '    def __init__(self, name: str): ...',
             '',
             'class Script[T: _typings.Object]:',

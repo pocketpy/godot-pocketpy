@@ -495,11 +495,14 @@ class PyValueExpr:
     @staticmethod
     def convert_to_string(value: 'PyValueExpr') -> str:
         
+        default_str = "default(" + repr(value.value_expr) + ")"
+        
+        
         if not value.type_expr:
             raise ValueError(f"value expression --->{value.value_expr}<--- has no type")
         
         if value.value_expr == 'null':
-            return "default('''" + value.value_expr + "''')"
+            return default_str
         
         if PyTypeExpr.is_type_match(PyType.get('int'), value.type_expr):
             return value.value_expr
@@ -508,7 +511,7 @@ class PyValueExpr:
         elif PyTypeExpr.is_type_match(PyType.get('str'), value.type_expr):
             return value.value_expr
         elif PyTypeExpr.is_type_match(PyType.get('StringName'), value.type_expr):
-            return "default('''" + value.value_expr + "''')"
+            return default_str
         elif PyTypeExpr.is_type_match(PyType.get('bool'), value.type_expr):
             if value.value_expr.lower() == 'true':
                 return 'True'
@@ -524,7 +527,7 @@ class PyValueExpr:
             else:
                 if DEBUG:
                     print(f"Warning: value expression: --->{value.value_expr}<--- type: '{PyTypeExpr.convert_to_string(value.type_expr, wrap_with_single_quote=False)}' has not matched any type")
-                return "default('''" + value.value_expr + "''')"
+                return default_str
     
     @staticmethod
     def validate(value: 'PyValueExpr') -> bool:
