@@ -162,17 +162,25 @@ Error PythonScript::_reload(bool keep_state) {
 	exposed_type = py_totype(exposed_class);
 	Vector<ExportStatement> exports;
 
+	std::pair<Vector<ExportStatement> *, PythonScriptMeta *> ctx_pair = { &exports, &new_meta };
+
 	py_applydict(
 			exposed_class, [](py_Name name, py_ItemRef value, void *ctx) -> bool {
-				Vector<ExportStatement> *exports = (Vector<ExportStatement> *)ctx;
+				auto ctx_pair = (std::pair<Vector<ExportStatement> *, PythonScriptMeta *> *)ctx;
+				Vector<ExportStatement> *exports = ctx_pair->first;
+				PythonScriptMeta *meta = ctx_pair->second;
+				StringName name_godot = python_name_to_godot(name);
+
 				if (py_istype(value, pyctx()->tp_ExportStatement)) {
 					ExportStatement *e = (ExportStatement *)py_touserdata(value);
-					e->name = python_name_to_godot(name);
+					e->name = name_godot;
 					exports->push_back(*e);
+				} else if (py_istype(value, tp_function)) {
+					meta->methods[name_godot] = 0;
 				}
 				return true;
 			},
-			&exports);
+			&ctx_pair);
 
 	exports.sort();
 
@@ -215,11 +223,11 @@ String PythonScript::_get_class_icon_path() const {
 }
 
 bool PythonScript::_has_method(const StringName &p_method) const {
-	return false;
+	return meta.methods.has(p_method);
 }
 
 bool PythonScript::_has_static_method(const StringName &p_method) const {
-	return _has_method(p_method); // TODO: check @staticmethod
+	return false;
 }
 
 Variant PythonScript::_get_script_method_argument_count(const StringName &p_method) const {

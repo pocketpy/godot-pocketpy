@@ -93,6 +93,7 @@ void call_func(PythonScriptInstance *p_instance, const StringName *p_method, con
 	py_push(&p_instance->py);
 	bool ok = py_pushmethod(godot_name_to_python(*p_method));
 	if (!ok) {
+		WARN_PRINT(String(*p_method) + " not found in " + p_instance->script->get_path());
 		r_error->error = GDEXTENSION_CALL_ERROR_INVALID_METHOD;
 		py_pop();
 		return;

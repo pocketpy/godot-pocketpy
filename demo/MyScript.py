@@ -9,8 +9,10 @@ class MyScript(Extends(Node)):
 	def __init__(self):
 		print("__init__()")
 		print("==>", self.x, self.y, self.z, self.w)
-		print(self.owner)
 
 	def _ready(self):
-		print("_ready()")
-		print("==>", self.x, self.y, self.z, self.w)
+		print('_ready()')
+		print('==>', self.x, self.y, self.z, self.w)
+
+	def _process(self, delta: float) -> None:
+		print('==>', f'_process({delta:.4f})')

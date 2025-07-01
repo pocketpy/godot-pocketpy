@@ -13,3 +13,6 @@ func _ready() -> void:
 
 func test(a: int, b: float):
 	return a + b
+
+func _process(delta: float) -> void:
+	pass

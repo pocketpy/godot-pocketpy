@@ -20,6 +20,7 @@ struct PythonScriptMeta {
 	StringName class_name;
 	StringName extends;
 	HashMap<StringName, Variant> default_values;
+	HashMap<StringName, int> methods;
 	bool is_valid;
 
 	PythonScriptMeta() :
@@ -28,6 +29,7 @@ struct PythonScriptMeta {
 			class_name(),
 			extends(),
 			default_values(),
+			methods(),
 			is_valid(false) {
 	}
 };
