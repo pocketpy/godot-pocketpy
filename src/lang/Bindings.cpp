@@ -8,6 +8,31 @@
 
 namespace pkpy {
 
+static bool Variant_getattribute(py_Ref self, py_Name name) {
+	Variant *v = (Variant *)py_touserdata(self);
+	bool r_valid;
+	Variant res = v->get_named(python_name_to_godot(name), r_valid);
+	if (!r_valid) {
+		return AttributeError(self, name);
+	}
+	py_newvariant(py_retval(), &res);
+	return true;
+}
+
+static bool Variant_setattribute(py_Ref self, py_Name name, py_Ref value) {
+	Variant *v = (Variant *)py_touserdata(self);
+	bool r_valid;
+	v->set_named(python_name_to_godot(name), py_tovariant(value), r_valid);
+	if (!r_valid) {
+		return AttributeError(self, name);
+	}
+	return true;
+}
+
+static bool Variant_delattribute(py_Ref self, py_Name name) {
+	return TypeError("cannot delete attribute");
+}
+
 static void setup_exports() {
 	// export
 	pyctx()->tp_ExportStatement = py_newtype("_ExportStatement", tp_object, pyctx()->godot, [](void *ud) {
@@ -126,6 +151,8 @@ void setup_python_bindings() {
 		Variant *v = static_cast<Variant *>(ud);
 		v->~Variant();
 	});
+
+	py_tphookattributes(type, Variant_getattribute, Variant_setattribute, Variant_delattribute);
 
 	py_bindmethod(type, "__getitem__", [](int argc, py_Ref argv) -> bool {
 		auto self = (Variant *)py_touserdata(&argv[0]);
