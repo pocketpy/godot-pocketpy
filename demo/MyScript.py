@@ -9,6 +9,7 @@ class MyScript(Extends(Node)):
 	def __init__(self):
 		print("__init__()")
 		print("==>", self.x, self.y, self.z, self.w)
+		print(self.owner)
 
 	def _ready(self):
 		print("_ready()")

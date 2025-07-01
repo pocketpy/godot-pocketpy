@@ -62,25 +62,15 @@ Object *get_owner_func(PythonScriptInstance *p_instance) {
 }
 
 void get_property_state_func(PythonScriptInstance *p_instance, GDExtensionScriptInstancePropertyStateAdd p_add_func, void *p_userdata) {
-	// for (Variant key : *p_instance->data.ptr()) {
-	// 	StringName name = key;
-	// 	Variant value = p_instance->data->get(key);
-	// 	p_add_func(&name, &value, p_userdata);
-	// }
-	StringName name = "x";
-	Variant value = 42;
-	p_add_func(&name, &value, p_userdata);
+	// StringName name = "x";
+	// Variant value = 42;
+	// p_add_func(&name, &value, p_userdata);
 }
 
 GDExtensionScriptInstanceGetMethodList get_method_list_func;
 GDExtensionScriptInstanceFreeMethodList2 free_method_list_func;
 
 GDExtensionVariantType get_property_type_func(PythonScriptInstance *p_instance, const StringName *p_name, GDExtensionBool *r_is_valid) {
-	if (*p_name == StringName("x")) {
-		*r_is_valid = true;
-		return GDEXTENSION_VARIANT_TYPE_INT;
-	}
-	*r_is_valid = false;
 	return GDEXTENSION_VARIANT_TYPE_NIL;
 }
 
@@ -103,8 +93,8 @@ void call_func(PythonScriptInstance *p_instance, const StringName *p_method, con
 	py_push(&p_instance->py);
 	bool ok = py_pushmethod(godot_name_to_python(*p_method));
 	if (!ok) {
-		ERR_PRINT("No such method: " + String(*p_method));
 		r_error->error = GDEXTENSION_CALL_ERROR_INVALID_METHOD;
+		py_pop();
 		return;
 	}
 

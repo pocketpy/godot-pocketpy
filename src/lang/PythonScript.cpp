@@ -188,11 +188,9 @@ Error PythonScript::_reload(bool keep_state) {
 	Ref<GDScript> gds = memnew(GDScript);
 	new_meta.gds = gds;
 	new_meta.gds->set_source_code(String("\n").join(buffer));
-	// print source code
-	printf("%s\n", new_meta.gds->get_source_code().utf8().get_data());
 	Error err = new_meta.gds->reload(false);
 	if (err != OK) {
-		ERR_PRINT("Failed to compile GDScript: " + itos(err));
+		ERR_PRINT("Failed to compile GDScript: " + itos(err) + "\n" + new_meta.gds->get_source_code());
 		return ERR_COMPILATION_FAILED;
 	}
 
@@ -314,7 +312,6 @@ Variant PythonScript::_get_rpc_config() const {
 }
 
 Variant PythonScript::_new(const Variant **args, GDExtensionInt arg_count, GDExtensionCallError &error) {
-	printf("==> PythonScript::_new called with %d args\n", (int)arg_count);
 	if (!_can_instantiate()) {
 		error.error = GDEXTENSION_CALL_ERROR_INVALID_METHOD;
 		return {};
