@@ -5,6 +5,7 @@
 #include <godot_cpp/classes/engine.hpp>
 #include <godot_cpp/classes/node.hpp>
 #include <godot_cpp/core/defs.hpp>
+#include <godot_cpp/variant/callable.hpp>
 
 namespace pkpy {
 
@@ -154,8 +155,27 @@ void setup_python_bindings() {
 
 	py_tphookattributes(type, Variant_getattribute, Variant_setattribute, Variant_delattribute);
 
+	py_bindmethod(type, "__call__", [](int argc, py_Ref argv) -> bool {
+		Variant *self = (Variant *)py_touserdata(&argv[0]);
+		if (self->get_type() != Variant::CALLABLE) {
+			return TypeError("Variant is not callable");
+		}
+		Callable callable(*self);
+		int64_t args_count = callable.get_argument_count();
+		if (args_count >= 0 && args_count != argc - 1) {
+			return TypeError("expected %d arguments, got %d", args_count, argc - 1);
+		}
+		Array godot_args;
+		for (int i = 1; i < argc; i++) {
+			godot_args.push_back(py_tovariant(&argv[i]));
+		}
+		Variant res = callable.callv(godot_args);
+		py_newvariant(py_retval(), &res);
+		return true;
+	});
+
 	py_bindmethod(type, "__getitem__", [](int argc, py_Ref argv) -> bool {
-		auto self = (Variant *)py_touserdata(&argv[0]);
+		Variant *self = (Variant *)py_touserdata(&argv[0]);
 		Variant key = py_tovariant(&argv[1]);
 		bool r_valid;
 		Variant value = self->get_keyed(key, r_valid);
@@ -167,7 +187,7 @@ void setup_python_bindings() {
 	});
 
 	py_bindmethod(type, "__setitem__", [](int argc, py_Ref argv) -> bool {
-		auto self = (Variant *)py_touserdata(&argv[0]);
+		Variant *self = (Variant *)py_touserdata(&argv[0]);
 		Variant key = py_tovariant(&argv[1]);
 		Variant value = py_tovariant(&argv[2]);
 		bool r_valid;
@@ -180,7 +200,7 @@ void setup_python_bindings() {
 	});
 
 	py_bindmethod(type, "__bool__", [](int argc, py_Ref argv) -> bool {
-		auto self = (Variant *)py_touserdata(&argv[0]);
+		Variant *self = (Variant *)py_touserdata(&argv[0]);
 		bool res = self->booleanize();
 		py_newbool(py_retval(), res);
 		return true;
@@ -193,7 +213,7 @@ void setup_python_bindings() {
 	});
 
 	py_bindmethod(type, "__repr__", [](int argc, py_Ref argv) -> bool {
-		auto self = (Variant *)py_touserdata(&argv[0]);
+		Variant *self = (Variant *)py_touserdata(&argv[0]);
 		String type_name = Variant::get_type_name(self->get_type());
 		String r = "<godot.Variant " + type_name + ">";
 		py_newstring(py_retval(), r);
@@ -201,7 +221,7 @@ void setup_python_bindings() {
 	});
 
 	py_bindmethod(type, "__str__", [](int argc, py_Ref argv) -> bool {
-		auto self = (Variant *)py_touserdata(&argv[0]);
+		Variant *self = (Variant *)py_touserdata(&argv[0]);
 		py_newstring(py_retval(), self->stringify());
 		return true;
 	});
@@ -209,7 +229,7 @@ void setup_python_bindings() {
 #define DEF_UNARY_OP(__name, __op)                                      \
 	py_bindmethod(type, __name, [](int argc, py_Ref argv) -> bool {     \
 		PY_CHECK_ARGC(1);                                               \
-		auto self = (Variant *)py_touserdata(&argv[0]);                 \
+		Variant *self = (Variant *)py_touserdata(&argv[0]);             \
 		Variant other;                                                  \
 		Variant r_ret;                                                  \
 		bool r_valid;                                                   \
@@ -224,7 +244,7 @@ void setup_python_bindings() {
 #define DEF_BINARY_OP(__name, __op)                                     \
 	py_bindmethod(type, __name, [](int argc, py_Ref argv) -> bool {     \
 		PY_CHECK_ARGC(2);                                               \
-		auto self = (Variant *)py_touserdata(&argv[0]);                 \
+		Variant *self = (Variant *)py_touserdata(&argv[0]);             \
 		Variant other = py_tovariant(&argv[1]);                         \
 		Variant r_ret;                                                  \
 		bool r_valid;                                                   \

@@ -3,6 +3,9 @@
 #include "pocketpy.h"
 
 #include <atomic>
+#include <godot_cpp/classes/engine.hpp>
+#include <godot_cpp/classes/node.hpp>
+#include <godot_cpp/core/defs.hpp>
 #include <godot_cpp/variant/string_name.hpp>
 #include <godot_cpp/variant/variant.hpp>
 #include <thread>
@@ -68,12 +71,7 @@ inline StringName python_name_to_godot(py_Name name) {
 	return sn;
 }
 
-inline void log_python_error_and_clearexc(py_StackRef p0) {
-	char *msg = py_formatexc();
-	ERR_PRINT(msg);
-	PK_FREE(msg);
-	py_clearexc(p0);
-}
+void log_python_error_and_clearexc(py_StackRef p0);
 
 void py_newvariant(py_OutRef out, const Variant *val);
 void py_newstring(py_OutRef out, String val);

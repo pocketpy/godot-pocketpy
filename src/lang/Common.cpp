@@ -104,4 +104,11 @@ Variant py_tovariant(py_Ref val) {
 	}
 }
 
+void log_python_error_and_clearexc(py_StackRef p0) {
+	char *msg = py_formatexc();
+	print_error(String(msg));
+	PK_FREE(msg);
+	py_clearexc(p0);
+}
+
 } // namespace pkpy
