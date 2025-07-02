@@ -3,75 +3,10 @@ from .schema_gdt import *
 from .schema_py import *
 from collections import namedtuple
 
-'''
-Node本身的实际类型是GDNativeClass
-
-Node.new()，实际上是调用了GDNativeClass的实例方法new()，这里是类型对象模式
-
-
-* typings
-  * godot
-    * `__init__.pyi`，放类的真正定义Resource = GDNativeClass\[godot.typings.Resource\]('Resource')
-    * `typings.pyi`，放类型注释
-    * `enum.pyi`，放枚举的定义
-
-
-```python
-
-
-class GDNativeClass[T: Object]:
-    def __init__(self, name: str): ...
-
-class Script[T: Object]:
-    @property
-    def owner(self) -> T: ...
-
-def Extends[T: Object](cls: GDNativeClass[T]) -> type[Script[T]]: ...
-
-Resource = GDNativeClass[godot.typings.Resource]('Resource')
-
-class MyClass(Extends(Resource)):
-    pass
-
-s = MyClass().owner
-```
-
-## 重要内容！！
-
-```python
-from typing import Literal
-GDNativeClass = Literal['Node', 'Node2D', ...]
-BuiltinClass = Literal['int', 'float', 'bool', ...]
-
-def Extends(cls: GDNativeClass): ...
-
-def export(cls: GDNativeClass | BuiltinClass): ...
-
-class MyScript(Extends('Node')):
-    export_category("Main Category")
-    number: int = export('int')
-    resource: Resource = export('Resource')
-    my_node: Node = export('Node')
-
-    export_group("MyGroup")
-    x_int: int = export_range(1, 10, 2)
-    x_float: float = export_range(1.0, 10, 2)
-
-    export_subgroup("Extra Properties")
-    y_int: int = export('int', default=5)
-    z_float: float = export('float', default=3.14)
-```
-
-
-'''
-
-
-
-
 
 
 # ===============================
-# 通用映射
+# MARK: 通用映射
 # ===============================
 
 def _map_properties(cls_data: ClassesSingle|BuiltinClass, pyclass: PyClass) -> None:
@@ -86,7 +21,18 @@ def _map_properties(cls_data: ClassesSingle|BuiltinClass, pyclass: PyClass) -> N
 
 def _map_methods(cls_data: ClassesSingle|BuiltinClass, pyclass: PyClass) -> None:
     """映射方法，包括普通方法和静态方法"""
+    
+    # 计算每个方法出现的次数, 用于判断是否需要@overload
+    number_of_occurrences: dict[str, int] = {}
     for method_data in cls_data.methods or []:
+        if method_data.name in number_of_occurrences:
+            number_of_occurrences[method_data.name] += 1
+        else:
+            number_of_occurrences[method_data.name] = 1
+    
+    # 添加方法
+    for method_data in cls_data.methods or []:
+        is_overload = number_of_occurrences[method_data.name] > 1
         description = []
         if method_data.description:
             description.append(method_data.description)
@@ -109,6 +55,7 @@ def _map_methods(cls_data: ClassesSingle|BuiltinClass, pyclass: PyClass) -> None
             vararg_position=None if not method_data.is_vararg or method_data.arguments is None else len(method_data.arguments),
             return_type_expr=py_return_type_expr,
             is_static=method_data.is_static,
+            is_overload=is_overload,
         ))
         
         _map_method_arguments(method_data, pyclass.methods[-1])
@@ -158,7 +105,7 @@ def _map_constants(cls_data: ClassesSingle|BuiltinClass, pyclass: PyClass) -> No
 
 
 # ===============================
-# 各自独有的映射
+# MARK: 各自独有的映射
 # ===============================
 
 def _map_signals(cls_data: ClassesSingle, pyclass: PyClass) -> None:
@@ -191,8 +138,21 @@ def _map_signals(cls_data: ClassesSingle, pyclass: PyClass) -> None:
         
 def _map_operators(cls_data: BuiltinClass, pyclass: PyClass) -> None:
     """映射运算符重载"""
+    
+    # 计算每个运算符出现的次数, 用于判断是否需要@overload
+    number_of_occurrences: dict[str, int] = {}
     for operator_data in cls_data.operators or []:
+        if operator_data.name in number_of_occurrences:
+            number_of_occurrences[operator_data.name] += 1
+        else:
+            number_of_occurrences[operator_data.name] = 1
+    
+    # 添加运算符重载
+    for operator_data in cls_data.operators or []:
+        is_overload = number_of_occurrences[operator_data.name] > 1
+        
         if PyMethod.try_parse_name(operator_data.name):
+            
             if operator_data.right_type:
                 # 二元运算符（如 __add__、__sub__ 等），有 right_type
                 pyclass.methods.append(PyMethod(
@@ -203,6 +163,7 @@ def _map_operators(cls_data: BuiltinClass, pyclass: PyClass) -> None:
 					)],
 					return_type_expr=PyTypeExpr.get_and_add(operator_data.return_type),
 					description_lines=operator_data.description.splitlines() if operator_data.description else [],
+                    is_overload=is_overload,
 				))
             else:
                 # 一元运算符（如 __neg__、__invert__ 等），没有 right_type
@@ -211,6 +172,7 @@ def _map_operators(cls_data: BuiltinClass, pyclass: PyClass) -> None:
                     arguments=[],
                     return_type_expr=PyTypeExpr.get_and_add(operator_data.return_type),
                     description_lines=operator_data.description.splitlines() if operator_data.description else [],
+                    is_overload=is_overload,
                 ))
         else:
             if DEBUG:
@@ -249,6 +211,7 @@ def map_gdt_to_py(gdt_all_in_one: GodotInOne) -> MapResult:
             imports=[
             
             '''import typing''',
+            '''from typing import overload''',
             'from .enum import *',
             "",
             "",
@@ -279,15 +242,41 @@ def map_gdt_to_py(gdt_all_in_one: GodotInOne) -> MapResult:
             '    @property',
             '    def owner(self) -> T: ...',
             '',
-            'def Extends[T: _typings.Object](cls: GDNativeClass[T]) -> type[Script[T]]: ...',
+            'def Extends[T: _typings.Object](cls: GDNativeClass[T]) -> type[Script[T]]:',
+            '    \"\"\"',
+            '    Creates a Python script class that extends a Godot native class.',
+            '    This function allows you to create Python classes that inherit from Godot\'s built-in',
+            '    Object-derived classes such as Node, Resource, etc. It cannot be used to extend',
+            '    built-in types that are not derived from Object (like Vector2, String, etc).',
+            '    Args:',
+            '        cls (GDNativeClass[T]): The Godot native class to extend. Must be a class',
+            '                                    derived from Object (e.g., Node, Resource).',
+            '    Returns:',
+            '        type[Script[T]]: A base class for your Python script, which will be properly',
+            '                        integrated with Godot\'s scripting system.',
+            '    Example:',
+            '        ```python',
+            '        class MyNode(Extends(Node)):',
+            '            def _ready(self):',
+            '                print("Node is ready!")',
+            '        class MyResource(Extends(Resource)):',
+            '            def _init(self):',
+            '                self.data = "Hello, World!"',
+            '        ```',
+            '    Note:',
+            '        You can only extend native classes derived from Object. Attempting to extend',
+            '    built-in types like Vector2, Dictionary, or String will result in an error.',
+            '    \"\"\"',
+            '    ...',
             ],
-            global_variables=[
-            ]
+            global_variables=[],
         ),
     )
     
     
-    # class single
+    # ===============================
+    # MARK: class single
+    # ===============================
     class_single_classes = []
     for cls_data in gdt_all_in_one.classes:
         
@@ -316,7 +305,10 @@ def map_gdt_to_py(gdt_all_in_one: GodotInOne) -> MapResult:
         
         class_single_classes.append(pyclass)
     
-    # builtin class
+    
+    # ===============================
+    # MARK: builtin class
+    # ===============================
     builtin_classes = []
     for cls_data in gdt_all_in_one.builtin_classes:
         description = []
@@ -343,8 +335,10 @@ def map_gdt_to_py(gdt_all_in_one: GodotInOne) -> MapResult:
                 
         builtin_classes.append(pyclass)
     
+    
+    
     # ===============================
-    # enum
+    # MARK: enum
     # ===============================
     # --- global enum ---
     enum_classes = []
