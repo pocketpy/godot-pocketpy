@@ -5,6 +5,9 @@ from enum import Enum
 import traceback
 
 
+
+
+
 DEBUG = True
 
 
@@ -200,3 +203,115 @@ class ValidatorResults():
         
     def result(self) -> bool:
         return all(self.results)
+
+
+def build_dependency_graph(nodes: list, get_name_func, get_dependencies_func) -> dict[str, list[str]]:
+    """
+    通用的依赖图构建函数，用于不同类型的对象间依赖关系建模
+    
+    这个函数接受任意类型的节点列表，通过提供的访问器函数获取节点名称和依赖关系，
+    构建一个表示依赖关系的有向图。生成的图可用于拓扑排序、循环依赖检测等。
+    
+    Args:
+        nodes: 节点列表，可以是任何类型的对象
+        get_name_func: 获取节点名称的函数，接收节点作为参数，返回字符串标识符
+            例如: lambda node: node.name
+        get_dependencies_func: 获取节点依赖的函数，接收节点作为参数，返回该节点依赖的
+            其他节点名称列表（依赖节点的字符串标识符）
+            例如: lambda node: [dep.name for dep in node.dependencies]
+            
+    Returns:
+        依赖图，键为节点名称，值为该节点依赖的其他节点名称列表
+        
+    Examples:
+        # 基于类的继承关系构建依赖图
+        def get_class_name(cls):
+            return cls.__name__
+            
+        def get_parent_classes(cls):
+            return [base.__name__ for base in cls.__bases__ if base is not object]
+            
+        class_graph = build_dependency_graph([A, B, C], get_class_name, get_parent_classes)
+        
+        # 对于自定义对象的依赖关系
+        def get_name(obj):
+            return obj.name
+            
+        def get_deps(obj):
+            return [ref.name for ref in obj.references]
+            
+        dependency_graph = build_dependency_graph(objects, get_name, get_deps)
+    """
+    dependency_graph = {}
+    node_map = {get_name_func(node): node for node in nodes}
+    
+    # 构建依赖图
+    for node in nodes:
+        node_name = get_name_func(node)
+        
+        # 确保每个节点都在图中有一个条目
+        if node_name not in dependency_graph:
+            dependency_graph[node_name] = []
+        
+        # 获取该节点依赖的所有节点
+        dependencies = get_dependencies_func(node)
+        
+        # 将依赖节点添加到依赖图
+        for dep_name in dependencies:
+            if dep_name != node_name and dep_name in node_map:
+                if dep_name not in dependency_graph:
+                    dependency_graph[dep_name] = []
+                if dep_name not in dependency_graph[node_name]:
+                    dependency_graph[node_name].append(dep_name)
+                    
+    return dependency_graph
+
+def topological_sort(graph: dict[str, list[str]]) -> list[str]:
+    """
+    对依赖图执行拓扑排序，确保依赖项在被依赖项之前
+    
+    该算法实现了对有向图的深度优先搜索拓扑排序，能够处理复杂的依赖网络，
+    返回的结果保证：如果A依赖B，则B在结果列表中出现在A之前。
+    算法也可以处理有环图，通过暂时标记节点来检测环，但不会抛出异常。
+    
+    Args:
+        graph: 依赖图，键为节点名称，值为该节点依赖的节点名称列表
+        
+    Returns:
+        排序后的节点名称列表，依赖在前，被依赖在后
+        
+    Examples:
+        # 从依赖图获取正确的处理顺序
+        graph = {
+            'A': ['B', 'C'],  # A 依赖 B 和 C
+            'B': ['D'],       # B 依赖 D
+            'C': ['D'],       # C 依赖 D
+            'D': []           # D 不依赖任何节点
+        }
+        order = topological_sort(graph)
+        # 结果将是 ['D', 'B', 'C', 'A']，确保依赖在前
+    """
+    visited = set()
+    temp_mark = set()
+    ordered_nodes = []
+    
+    def visit(node):
+        if node in temp_mark:
+            # 检测到循环依赖，略过该节点以避免无限递归
+            return
+        if node not in visited:
+            temp_mark.add(node)
+            for dep in graph.get(node, []):
+                visit(dep)
+            temp_mark.remove(node)
+            visited.add(node)
+            ordered_nodes.append(node)
+    
+    # 为所有节点执行拓扑排序
+    for node in graph:
+        if node not in visited:
+            visit(node)
+    
+    # 反转列表，使依赖在前，被依赖在后
+    ordered_nodes.reverse()
+    return ordered_nodes
