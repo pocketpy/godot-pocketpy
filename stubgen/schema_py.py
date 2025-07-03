@@ -641,7 +641,8 @@ class PyValueExpr:  # MARK: PyValueExpr
                     
                     if len(members) != 1:
                         try: 
-                            raise ValueError(f"enum type --->{enum_type}<--- has multiple members or no members for value: --->{enum_value}<---  \n\t{'\n\t'.join(PyClass.convert_to_lines(enum_class))}")
+                            indent = '\n\t'
+                            raise ValueError(f"enum type --->{enum_type}<--- has multiple members or no members for value: --->{enum_value}<---  {indent}{indent.join(PyClass.convert_to_lines(enum_class))}")
                         except ValueError as e:
                             traceback.print_exc()
                             return "IGNORED_ENUM_VALUE"
