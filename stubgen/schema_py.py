@@ -3,9 +3,13 @@ from enum import Enum
 import re
 from typing import ClassVar, Literal
 
+from ._deprecated.v1___main__ import wrap_default_value
+
 from .tools import validate_types_on_init, ValidatorResults, DEBUG, build_dependency_graph, topological_sort
 from .schema_gdt import GodotInOne
 from keyword import iskeyword
+import traceback
+
 
 
 
@@ -301,9 +305,7 @@ class PyType:  # MARK: PyType
         if bool(re.fullmatch(r'const [A-Za-z0-9_]+\.[A-Za-z0-9_]*\s?\*\*?', name)):
             return 'intptr'
         
-        # 无法转换的类型
-        if name.startswith('Signal'):
-            raise ValueError(f"Signal type is not supported, please use PyTypeExpr.get_and_add_specified('{name}')")
+        
         if raise_error:
             raise ValueError(f"Unknown type: {name}")
         return None
@@ -323,66 +325,60 @@ class PyType:  # MARK: PyType
         return results.result()
 
 
-
-
-@validate_types_on_init
 @dataclass
-class PyTypeExpr:  # MARK: PyTypeExpr 
+class _ICompositeType:  # MARK: _ICompositeType
+    
+    def convert_to_string(self) -> str:
+        raise NotImplementedError
+    
+    @staticmethod
+    def parse_type(expr: str) -> '_ICompositeType':
+        expr = expr.strip()
+        
+        # 首先尝试解析 Signal 类型
+        if expr.startswith('Signal('):
+            
+            return _SignalType.parse_type(expr)
+                
+                
+        # 如果不是 Signal 类型，则交给 _UnionType 解析
+        return _UnionType.parse_type(expr)  # 我们选择将_UnionType放在最外边
+    
+    def get_used_types(self) -> set[PyType]:
+        raise NotImplementedError
+
+    @staticmethod
+    def is_type_matched(pytype: 'PyType', composite_type: '_ICompositeType') -> bool:
+        return composite_type.is_type_matched(pytype)
+    
+    def is_type_matched(self, pytype: 'PyType') -> bool:
+        raise NotImplementedError
+
+@dataclass
+class _UnionType(_ICompositeType):  # MARK: _UnionType
     '''
-    一个python类型表达式
+    class aaa:...
+    class bbb[aaa]:...
+    class ccc[bbb]:...
+    class ddd[aaa]:...
+    
+    aaa, -bbb, -ccc  ->  aaa|ddd
+    aaa, bbb, ccc  ->  aaa|bbb|ccc
+    aaa -> aaa
+    
     '''
-    
-    composite_types: list[tuple|None] = field(default_factory=lambda: [None])  # tuple[PyType, tuple[PyType, tuple[PyType, ...] | None] | None] | None
-    specified_string: str | None = field(default=None)  # 如果指定了字符串, 那么convert_to_string将直接返回这个字符串, 同时validate将返回True
-    
-    ALL_TYPE_EXPRS: ClassVar[dict[str, 'PyTypeExpr']] = {}
-    
-    @classmethod
-    def get(cls, expr: str) -> 'PyTypeExpr':
-        if expr in cls.ALL_TYPE_EXPRS:
-            return cls.ALL_TYPE_EXPRS[expr]
-        else:
-            raise ValueError(f"PyTypeExpr --->{expr}<--- is not found")
+    types: list['_GenericType']
+
+
+    def convert_to_string(self) -> str:
+        return f"{'|'.join([type.convert_to_string() for type in self.types])}"
     
     @staticmethod
-    def try_parse_generic_expr(expr: str) -> tuple['PyType', str] | None:
-        
-        # 目前只有typedarray支持泛型
-        if expr.startswith('typedarray::'):
-            
-            # typedarray::21/9:xxx  --> Array[xxx]
-            if bool(re.fullmatch(r'typedarray::[0-9]*/[0-9]*:[A-Za-z0-9_]+', expr)):
-                return (PyType.get('Array'), expr.replace('typedarray::', '').replace(re.search(r'[0-9]*/[0-9]*:', expr).group(), ''))
-            
-            # typedarray::21/9:  --> Array
-            if bool(re.fullmatch(r'typedarray::[0-9]*/[0-9]*:', expr)):
-                return None
-            
-            # typedarray::xxx  --> Array[xxx]
-            return (PyType.get('Array'), expr.replace('typedarray::', ''))
-        
-            
-        
-        return None
-    
-    @staticmethod
-    def try_parse_union_expr(expr: str) -> list[str]:
-        return [sub_expr.strip() for sub_expr in expr.split(",")]
-    
-    @staticmethod
-    def _recursive_parse_type(origin_expr: str) -> list[tuple['PyType', str|None]]:
-        # TODO 在运行时会遇到一个报错: ValueError: Unknown type: Array[StringName], 这是因为Array[xxx]来自于原始字符串typedarray::xxx, 虽然能够处理从typedarray::xxx -> Array[xxx]的映射, 但是由于存在结构性问题, 导致在处理specified_string(也即Signal这一特例的类型注解)时会多调用一次try_parse_generic_expr, 因此导致无法使用.
-        # TODO 解决方案是将Signal这一特例也加入到格式化解析的逻辑中, 从而彻底去除任何特例(也即从此不需要字段PyType.specified_string). 这可能需要重新规划PyType.composite_type的结构, 并重构以上两个字段相关的所有逻辑.
-        
-        
-        generic_result = PyTypeExpr.try_parse_generic_expr(origin_expr)
-        if generic_result:
-            return [(generic_result[0], PyTypeExpr._recursive_parse_type(generic_result[1]))]  # 泛型类型, 继续递归
-        
-        union_exprs = PyTypeExpr.try_parse_union_expr(origin_expr)
+    def parse_type(expr: str) -> '_UnionType':
+        union_exprs = [sub_expr.strip() for sub_expr in expr.split(",")]
         
         if len(union_exprs) == 1:
-            return [(PyType.get(origin_expr), None)]  # 原子类型, 停止递归
+            return _UnionType([_GenericType.parse_type(expr)])  # 原子类型, 停止递归
         
         union_results = []
         
@@ -406,105 +402,171 @@ class PyTypeExpr:  # MARK: PyTypeExpr
             
             # 过滤
             filtered_types = [t for t in all_types if t not in exclude_types]
-            return [(t, None) for t in filtered_types]
+            return _UnionType([_GenericType(t, None) for t in filtered_types])
         else:
             # 普通的联合类型 "aaa,bbb,ccc" 模式
             for union_expr in union_exprs:
-                result = PyTypeExpr._recursive_parse_type(union_expr)
-                union_results.extend(result)
+                union_results.append(_GenericType.parse_type(union_expr))
         
-        return union_results  # 联合类型, 增加分支并继续递归
-        
+        return _UnionType(union_results)  # 联合类型, 增加分支并继续递归
+
+    def get_used_types(self) -> set[PyType]:
+        return set().union(*[type.get_used_types() for type in self.types])
     
+    def is_type_matched(self, pytype: 'PyType') -> bool:
+        return any(type.is_type_matched(pytype) for type in self.types)
+
+@dataclass
+class _GenericType(_ICompositeType):  # MARK: _GenericType
+    '''
+    typedarray::xxx  --> Array[xxx]
+    typedarray::21/9:xxx  --> Array[xxx]
+    typedarray::21/9:  --> Array
+    typedarray::xxx  --> Array[xxx]
+    
+    aaa -> aaa
+    
+    '''
+    generic_pytype: PyType
+    type_arg: '_UnionType | None'
+    
+
+    
+    def convert_to_string(self) -> str:
+        if self.type_arg:
+            return f"{self.generic_pytype.name}[{self.type_arg.convert_to_string()}]"
+        else:
+            return self.generic_pytype.name
+    
+    @staticmethod
+    def parse_type(expr: str) -> '_GenericType':
+        
+        # 目前只有typedarray支持泛型
+        if expr.startswith('typedarray::'):
+            
+            # typedarray::21/9:xxx  --> Array[xxx]
+            if bool(re.fullmatch(r'typedarray::[0-9]*/[0-9]*:[A-Za-z0-9_]+', expr)):
+                inner_type_expr = expr.replace('typedarray::', '').replace(re.search(r'[0-9]*/[0-9]*:', expr).group(), '')
+                return _GenericType(PyType.get('Array'), _UnionType.parse_type(inner_type_expr))
+            
+            # typedarray::21/9:  --> Array
+            if bool(re.fullmatch(r'typedarray::[0-9]*/[0-9]*:', expr)):
+                return _GenericType(PyType.get('Array'), None)
+            
+            # typedarray::xxx  --> Array[xxx]
+            inner_type_expr = expr.replace('typedarray::', '')
+            return _GenericType(PyType.get('Array'), _UnionType.parse_type(inner_type_expr))
+        
+        elif PyType.get(expr):
+            return _GenericType(PyType.get(expr), None)
+        
+        raise ValueError(f"Unknown type: {expr}")
+    
+    def get_used_types(self) -> set[PyType]:
+        if self.type_arg:
+            return set([self.generic_pytype]).union(self.type_arg.get_used_types())
+        else:
+            return set([self.generic_pytype])
+
+    def is_type_matched(self, pytype: 'PyType') -> bool:
+        return pytype in PyType.get_subclasses(self.generic_pytype) or pytype == self.generic_pytype
+    
+@dataclass
+class _SignalType(_ICompositeType):  # MARK: _SignalType
+    '''
+    Signal[Callable[[xxx, xxx, ...], xxx]] -> Signal[Callable[[xxx, xxx, ...], xxx]]
+    '''
+    return_type: _UnionType
+    arguments: list[_UnionType]
+    
+
+    def convert_to_string(self) -> str:
+        if not self.arguments:
+            return f"Signal[{self.return_type.convert_to_string()}]"
+        
+        args_str = ", ".join([arg.convert_to_string() for arg in self.arguments])
+        return f"Signal[Callable[[{args_str}], {self.return_type.convert_to_string()}]]"
+    
+    @staticmethod
+    def parse_type(expr: str) -> '_SignalType':
+        # 检查是否是符合 Signal[Callable[xxx|xxx|xxx|..., xxx]] 格式
+        match = re.match(r'Signal\(Callable\(\((.*?)\), ([A-Za-z0-9_]+)\)\)', expr)
+        args_matched = [arg.strip() for arg in match.group(1).split('|')] if '|' in match.group(1) else []
+        return_type_matched = match.group(2).strip()
+        
+        if not return_type_matched:
+            raise ValueError(f"Invalid Signal type format --->{expr}<---")
+        
+        # 解析参数列表
+        arg_types = []
+        if args_matched:
+            for arg in args_matched:
+                arg_types.append(_UnionType.parse_type(arg))
+        
+        # 解析返回类型
+        return_type = _UnionType.parse_type(return_type_matched)
+        
+        return _SignalType(return_type, arg_types)
+
+    def get_used_types(self) -> set[PyType]:
+        used_types = set()
+        used_types.update(self.return_type.get_used_types())
+        for arg in self.arguments:
+            used_types.update(arg.get_used_types())
+        return used_types
+    
+    def is_type_matched(self, pytype: 'PyType') -> bool:
+        return pytype is PyType.get('Signal')
+
+
+@validate_types_on_init
+@dataclass
+class PyTypeExpr:  # MARK: PyTypeExpr 
+    '''
+    一个python类型表达式
+    '''
+    
+    composite_types: _ICompositeType
+    
+        
+    ALL_TYPE_EXPRS: ClassVar[dict[str, 'PyTypeExpr']] = {}
+    
+    @classmethod
+    def get(cls, expr: str) -> 'PyTypeExpr':
+        if expr in cls.ALL_TYPE_EXPRS:
+            return cls.ALL_TYPE_EXPRS[expr]
+        else:
+            raise ValueError(f"PyTypeExpr --->{expr}<--- is not found")
+
     @classmethod
     def get_and_add(cls, origin_expr: str) -> 'PyTypeExpr':
         if origin_expr in cls.ALL_TYPE_EXPRS:
             return PyTypeExpr.get(origin_expr)
         
-        composite_types = PyTypeExpr._recursive_parse_type(origin_expr.strip())
+        composite_types = _ICompositeType.parse_type(origin_expr.strip())
         cls.ALL_TYPE_EXPRS[origin_expr] = cls(composite_types)
         return cls.get(origin_expr)
     
-    @classmethod
-    def get_and_add_specified(cls, specified_string: str) -> 'PyTypeExpr':
-        if specified_string in cls.ALL_TYPE_EXPRS:
-            return PyTypeExpr.get(specified_string)
-        
-        cls.ALL_TYPE_EXPRS[specified_string] = cls(specified_string=specified_string)
-        return cls.get(specified_string)
         
     @staticmethod
-    def _recursive_convert_to_string(composite_types: list[tuple['PyType', list[tuple['PyType', list[tuple['PyType', list[tuple['PyType', ...] | None] | None] | None] | None] | None] | None]]) -> str:
-        
-        
-        s = " | ".join([PyType.convert_to_string(composite_type[0], wrap_with_single_quote=False) if composite_type[1] is None else f"{PyType.convert_to_string(composite_type[0], wrap_with_single_quote=False)}[{PyTypeExpr._recursive_convert_to_string(composite_type[1])}]" for composite_type in composite_types])
-        
-        return s
+    def _recursive_convert_to_string(composite_types: _ICompositeType) -> str:
+        return composite_types.convert_to_string()
         
         
     @staticmethod
     def convert_to_string(pytype_expr: 'PyTypeExpr', wrap_with_single_quote: bool = True) -> str:
-        if pytype_expr.specified_string:
-            if wrap_with_single_quote:
-                return "'" + pytype_expr.specified_string + "'"
-            else:
-                return pytype_expr.specified_string
         
         return PyTypeExpr._recursive_convert_to_string(pytype_expr.composite_types)
     
     @staticmethod
     def is_type_matched(pytype: 'PyType', pytype_expr: 'PyTypeExpr') -> bool:
-        if pytype_expr.specified_string:
-            raise ValueError(f"specified string --->{pytype_expr.specified_string}<--- is not supported")
-        
-        matched = []
-        for composite_type in pytype_expr.composite_types:
-            if pytype == composite_type[0] or pytype in PyType.get_subclasses(composite_type[0]):
-                matched.append(True)
-                break
-            else:
-                matched.append(False)
-        
-        return any(matched)
+        return pytype_expr.composite_types.is_type_matched(pytype)
     
-    @staticmethod
-    def _recursive_get_used_types(composite_types: list[tuple['PyType', list[tuple['PyType', list[tuple['PyType', list[tuple['PyType', ...] | None] | None] | None] | None] | None] | None]]) -> set[PyType]:
-        used_types = set()
-        for composite_type in composite_types:
-            if composite_type[1] is None:
-                used_types.add(composite_type[0])
-            else:
-                used_types.add(composite_type[0])
-                used_types.update(PyTypeExpr._recursive_get_used_types(composite_type[1]))
-        return used_types
     
     @staticmethod
     def get_used_types(pytype_expr: 'PyTypeExpr') -> set[PyType]:
         used_types = set()
-        print(pytype_expr)
-        
-        # 处理Signal[Callable[[xxx, xxx, ...], xxx]]类型
-        if pytype_expr.specified_string is not None:
-            signal_pattern = r'Signal\[Callable\[\[(.*?)\], ([A-Za-z0-9_]+)\]\]'
-            signal_match = re.match(signal_pattern, pytype_expr.specified_string)
-            if signal_match:
-                args_types = signal_match.group(1).split(',') if signal_match.group(1) != '' else []
-                args_types = [arg_type.strip() for arg_type in args_types]
-                return_type = signal_match.group(2).strip() if signal_match.group(2) != 'None' else None
-                
-                for arg_type in args_types:
-                    used_types.update(PyTypeExpr.get_used_types(PyTypeExpr.get_and_add(arg_type)))
-
-                if return_type:
-                    used_types.update(PyTypeExpr.get_used_types(PyTypeExpr.get_and_add(return_type)))
-                
-                used_types.update(set([PyType.get('Signal'), PyType.get('Callable')]))
-                return used_types
-            else:
-                raise ValueError(f"specified string --->{pytype_expr.specified_string}<--- is not supported")
-        
-        # 处理一般类型
-        used_types.update(PyTypeExpr._recursive_get_used_types(pytype_expr.composite_types))
+        used_types.update(pytype_expr.composite_types.get_used_types())
         return used_types
     
     @staticmethod
@@ -559,12 +621,32 @@ class PyValueExpr:  # MARK: PyValueExpr
             elif value.value_expr.lower() == 'false':
                 return 'False'
             else:
+                
                 raise ValueError(f"value expression --->{value.value_expr}<--- is not a valid bool")
         else:
-            
-            for enum_class in PyType.ENUM_TYPES:
-                if PyTypeExpr.is_type_matched(enum_class, value.type_expr):
-                    return value.value_expr
+            # 枚举类型处理
+            for enum_type in PyType.ENUM_TYPES:
+                if PyTypeExpr.is_type_matched(enum_type, value.type_expr):
+                    
+                    enum_value = value.value_expr
+                    enum_classes = PyClass.get(enum_type)
+                    if len(enum_classes) != 1:
+                        raise ValueError(f"enum type --->{enum_type}<--- has multiple classes or no classes for value: --->{enum_value}<---  classes: {enum_classes}")
+                    enum_class = enum_classes[0]
+                    
+                    members = []
+                    for member in enum_class.class_attributes:
+                        if member.value_expr.value_expr == enum_value:
+                            members.append(member)
+                    
+                    if len(members) != 1:
+                        try: 
+                            raise ValueError(f"enum type --->{enum_type}<--- has multiple members or no members for value: --->{enum_value}<---  \n\t{'\n\t'.join(PyClass.convert_to_lines(enum_class))}")
+                        except ValueError as e:
+                            traceback.print_exc()
+                            return "IGNORED_ENUM_VALUE"
+                        return enum_type.name + '.' + members[0].name
+                        
             else:
                 if DEBUG:
                     print(f"Warning: value expression: --->{value.value_expr}<--- type: '{PyTypeExpr.convert_to_string(value.type_expr, wrap_with_single_quote=False)}' has not matched any type")
@@ -769,14 +851,20 @@ class PyMember:  # MARK: PyMember
         if member.value_expr:
             s += f' = {PyValueExpr.convert_to_string(member.value_expr)}'
 
-        
-        if member.inline_comment or type_annotation_mode == "comment":
+        if type_annotation_mode == "comment" or member.inline_comment:
+            comment_parts = []
             
-            type_annotation = " type: "+PyTypeExpr.convert_to_string(member.type_expr) if type_annotation_mode == "comment" else ""
+            # 只有comment模式才会添加类型注解到注释中
+            if type_annotation_mode == "comment":
+                comment_parts.append(f"type: {PyTypeExpr.convert_to_string(member.type_expr)}")
             
-            additional_comment = f' comment: {member.inline_comment}' if member.inline_comment else ""
+            # 无论何种模式下, 若存在inline_comment, 那么都显示内联注释
+            if member.inline_comment:
+                comment_parts.append(f"comment: {member.inline_comment}")
             
-            s += f"  #{type_annotation}{additional_comment}"
+            if comment_parts:
+                s += f"  # {' '.join(comment_parts)}"
+                
         return s
 
     @staticmethod
@@ -820,6 +908,19 @@ class PyClass:  # MARK: PyClass
     
     CLASS_NAME_ALIAS: ClassVar[dict[str, str]] = {"str":"String", "int": "Int", "float": "Float", "bool": "Bool"}
     CLASS_IGNORED: ClassVar[set[str]] = {"None"}
+    
+    ALL_CLASSES: ClassVar[dict['PyType', list['PyClass']]] = {}
+    
+    def __post_init__(self):
+        if self.type not in PyClass.ALL_CLASSES:
+            PyClass.ALL_CLASSES[self.type] = []
+        PyClass.ALL_CLASSES[self.type].append(self)
+    
+    @staticmethod
+    def get(pytype: 'PyType') -> list['PyClass']:
+        # 由于一个类型可能对应多个PyClass实例, 因此这里并不强制约束PyClass和PyType的一对一关系, 而是返回所有可能的PyClass实例, 并实现两者在附属关系上的松耦合
+        
+        return PyClass.ALL_CLASSES[pytype]
     
     @staticmethod
     def _is_empty_class(pyclass: 'PyClass') -> bool:
@@ -866,10 +967,19 @@ class PyClass:  # MARK: PyClass
             class_name = PyClass.CLASS_NAME_ALIAS[class_name]
             
         # class xxx(xxx):
-        if pyclass.type.inherit:
-            lines.append(f'class {class_name}({PyType.convert_to_string(pyclass.type.inherit, wrap_with_single_quote=False)}):')
-        else:
-            lines.append(f'class {class_name}:')
+        
+        GENERIC_TYPES = {
+                "Signal": "[T: Callable]",
+                "Callable": "[T, R]",
+                "Array": "[T]",
+            }
+        generic_annotation = GENERIC_TYPES.get(class_name, "")
+        
+        inherit_annotation = "" if not pyclass.type.inherit else f'({PyType.convert_to_string(pyclass.type.inherit, wrap_with_single_quote=False)})'
+        
+        class_definition_line = f'class {class_name}{generic_annotation}{inherit_annotation}:'
+        
+        lines.append(class_definition_line)
         
         
         # class xxx(xxx): ...
@@ -905,7 +1015,7 @@ class PyClass:  # MARK: PyClass
         
         # class attributes
         for member in pyclass.class_attributes:
-            type_annotation_mode = 'comment' if pyclass.type.category == PyTypeCategory.ENUM else 'none'
+            type_annotation_mode = 'comment'
             lines.append("    " + PyMember.convert_to_string(member, type_annotation_mode = type_annotation_mode))
         lines.append('')
         
@@ -1003,6 +1113,7 @@ class PyFile:  # MARK: PyFile
         
         # 对依赖图进行拓扑排序
         ordered_class_names = topological_sort(usage_graph)
+        ordered_class_names.reverse()
         
         # 按照排序后的顺序添加类
         for class_name in ordered_class_names:
