@@ -120,20 +120,18 @@ def _map_signals(cls_data: ClassesSingle, pyclass: PyClass) -> None:
             arg_comments.append(f"{arg.name}: {arg.type}")
         
         # 创建信号类型表达式
-        signal_type_expr = f"Signal[Callable[[{', '.join([PyTypeExpr.convert_to_string(arg_type, wrap_with_single_quote=False) for arg_type in arg_types])}], None]]"
-        comment = f"{signal_data.name}({', '.join(arg_comments)})"
+        signal_type_expr = f"Signal(Callable(({'|'.join([PyTypeExpr.convert_to_string(arg_type, wrap_with_single_quote=False) for arg_type in arg_types])}), None))"
         
         # 添加信号成员
         if signal_data.description:
             replaced_description = signal_data.description.replace('\n', '    ')
-            signal_desc = f"{comment} - {replaced_description}" if replaced_description else comment
         else:
-            signal_desc = comment
-        
+            replaced_description = ""
+            
         pyclass.members.append(PyMember(
             name=signal_data.name,
-            type_expr=PyTypeExpr.get_and_add_specified(signal_type_expr),
-            inline_comment=signal_desc
+            type_expr=PyTypeExpr.get_and_add(signal_type_expr),
+            inline_comment=replaced_description
         ))
         
 def _map_operators(cls_data: BuiltinClass, pyclass: PyClass) -> None:
