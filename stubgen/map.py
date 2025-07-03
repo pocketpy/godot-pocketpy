@@ -1,6 +1,7 @@
 from typing import NamedTuple
 from .schema_gdt import *
 from .schema_py import *
+from .writer import Writer
 from collections import namedtuple
 
 
@@ -198,6 +199,7 @@ class MapResult:
     typings_pyi: PyFile
     enum_pyi: PyFile
     init_pyi: PyFile
+    c_writer: Writer
     
     
 def map_gdt_to_py(gdt_all_in_one: GodotInOne) -> MapResult:
@@ -269,8 +271,19 @@ def map_gdt_to_py(gdt_all_in_one: GodotInOne) -> MapResult:
             ],
             global_variables=[],
         ),
+        c_writer=Writer()
     )
-    
+
+    c_writer = map_result.c_writer
+    c_writer.write('#include "Common.hpp"')
+    c_writer.write('')
+    c_writer.write('namespace pkpy {')
+    c_writer.write('')
+    c_writer.write('static void register_GDNativeClass(const char* name);')
+    c_writer.write('static void register_GDNativeSingleton(const char* name);')
+    c_writer.write('')
+    c_writer.write('static void setup_bindings_generated() {')
+    c_writer.indent()
     
     # ===============================
     # MARK: class single
@@ -425,10 +438,12 @@ def map_gdt_to_py(gdt_all_in_one: GodotInOne) -> MapResult:
             map_result.init_pyi.global_variables.append(PyMember(
                 specified_string=f'{pytype.name} = GDNativeSingleton[_typings.{pytype.name}](\'{pytype.name}\')',
             ))
+            c_writer.write(f'register_GDNativeSingleton("{pytype.name}");')
         elif pytype.category == PyTypeCategory.GODOT_NATIVE:
             map_result.init_pyi.global_variables.append(PyMember(
                 specified_string=f'{pytype.name} = GDNativeClass[_typings.{pytype.name}](\'{pytype.name}\')',
             ))
+            c_writer.write(f'register_GDNativeClass("{pytype.name}");')
     
     # ===============================
     # enum.pyi
@@ -460,5 +475,10 @@ def map_gdt_to_py(gdt_all_in_one: GodotInOne) -> MapResult:
         specified_string='intptr = int',
         inline_comment='intptr is a pointer to an unknown type (const void*)',
     ))
+
+    c_writer.dedent()
+    c_writer.write('}')
+    c_writer.write('')
+    c_writer.write('} // namespace pkpy')
     
     return map_result

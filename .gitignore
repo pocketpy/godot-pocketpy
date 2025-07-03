@@ -38,3 +38,4 @@ __pycache__/
 *.pdb
 .vscode
 typings/
+src/lang/BindingsGenerated.cpp
