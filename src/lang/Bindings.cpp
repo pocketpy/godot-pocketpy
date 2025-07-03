@@ -1,4 +1,4 @@
-#include "Common.hpp"
+#include "Bindings.hpp"
 #include "PythonScriptInstance.hpp"
 #include "PythonScriptLanguage.hpp"
 
@@ -8,6 +8,8 @@
 #include <godot_cpp/variant/callable.hpp>
 
 namespace pkpy {
+
+void setup_bindings_generated();
 
 static bool Variant_getattribute(py_Ref self, py_Name name) {
 	Variant *v = (Variant *)py_touserdata(self);
@@ -129,10 +131,6 @@ void setup_python_bindings() {
 
 	// GDNativeClass
 	pyctx()->tp_NativeClass = py_newtype("GDNativeClass", tp_object, godot, NULL);
-
-	py_TValue tmp;
-	py_newtrivial(&tmp, pyctx()->tp_NativeClass, (py_i64)py_name("Node"));
-	py_setdict(godot, py_name("Node"), &tmp);
 
 	// Extends
 	py_bindfunc(godot, "Extends", [](int argc, py_Ref argv) -> bool {
@@ -282,6 +280,21 @@ void setup_python_bindings() {
 	// DEF_UNARY_OP("__pos__", OP_POSITIVE)
 	DEF_UNARY_OP("__invert__", OP_BIT_NEGATE)
 #undef DEF_UNARY_OP
+
+	setup_bindings_generated();
+}
+
+void register_GDNativeClass(const char *name) {
+	py_TValue tmp;
+	py_Name sn = py_name(name);
+	py_newtrivial(&tmp, pyctx()->tp_NativeClass, (py_i64)sn);
+	py_setdict(pyctx()->godot, sn, &tmp);
+}
+
+void register_GDNativeSingleton(const char *name, Object *obj) {
+	Variant v(obj);
+	py_OutRef out = py_emplacedict(pyctx()->godot, py_name(name));
+	py_newvariant(out, &v);
 }
 
 } //namespace pkpy

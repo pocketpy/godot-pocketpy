@@ -275,14 +275,21 @@ def map_gdt_to_py(gdt_all_in_one: GodotInOne) -> MapResult:
     )
 
     c_writer = map_result.c_writer
-    c_writer.write('#include "Common.hpp"')
+    c_writer.write('#include "Bindings.hpp"')
+
+    for pytype in PyType.ALL_TYPES.values():
+        if pytype.category == PyTypeCategory.SINGLETON_GODOT_NATIVE:
+            if pytype.name == 'ClassDB':
+                # TODO: implement ClassDB singleton
+                continue
+            s1 = re.sub('(.)([A-Z][a-z0-9]+)', r'\1_\2', pytype.name)
+            header_name = re.sub('([a-z])([A-Z])', r'\1_\2', s1).lower()
+            c_writer.write(f'#include <godot_cpp/classes/{header_name}.hpp>')
+
     c_writer.write('')
     c_writer.write('namespace pkpy {')
     c_writer.write('')
-    c_writer.write('static void register_GDNativeClass(const char* name);')
-    c_writer.write('static void register_GDNativeSingleton(const char* name);')
-    c_writer.write('')
-    c_writer.write('static void setup_bindings_generated() {')
+    c_writer.write('void setup_bindings_generated() {')
     c_writer.indent()
     
     # ===============================
@@ -438,8 +445,14 @@ def map_gdt_to_py(gdt_all_in_one: GodotInOne) -> MapResult:
             map_result.init_pyi.global_variables.append(PyMember(
                 specified_string=f'{pytype.name} = GDNativeSingleton[_typings.{pytype.name}](\'{pytype.name}\')',
             ))
-            c_writer.write(f'register_GDNativeSingleton("{pytype.name}");')
-        elif pytype.category == PyTypeCategory.GODOT_NATIVE:
+            if pytype.name == 'ClassDB':
+                # TODO: implement ClassDB singleton
+                continue
+            c_writer.write(f'register_GDNativeSingleton("{pytype.name}", {pytype.name}::get_singleton());')
+
+    c_writer.write('')
+    for pytype in PyType.ALL_TYPES.values():
+        if pytype.category == PyTypeCategory.GODOT_NATIVE:
             map_result.init_pyi.global_variables.append(PyMember(
                 specified_string=f'{pytype.name} = GDNativeClass[_typings.{pytype.name}](\'{pytype.name}\')',
             ))
