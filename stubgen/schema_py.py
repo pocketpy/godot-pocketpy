@@ -1107,9 +1107,12 @@ class PyClass:  # MARK: PyClass
         else:
             enum_const_type_list: list[PyType] = []
             for member in pyclass.class_attributes:
-                if member.value_expr.category == PyValueExprCategory.ENUM_CONST:
-                    # TODO
-
+                if member.value_expr.category != PyValueExprCategory.INT:
+                    raise ValueError(f"Enum member '{member.name}'='{member.value_expr}' is not INT")
+            
+            for enum_const_type in enum_const_type_list:
+                lines.append("    " + PyType.convert_to_string(enum_const_type, wrap_with_single_quote=False))
+            
         # instance members
         for member in pyclass.members:
             lines.append("    " + PyMember.convert_to_string(member))
