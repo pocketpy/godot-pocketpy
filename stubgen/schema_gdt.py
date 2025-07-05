@@ -290,7 +290,7 @@ class ClassesMethodReturnValue:
 # https://github.com/godotengine/godot/blob/1b37dacc1842779fb0d03a5b09026f59c13744fc/core/extension/extension_api_dump.cpp#L1058
 # https://github.com/godotengine/godot/blob/1b37dacc1842779fb0d03a5b09026f59c13744fc/core/extension/extension_api_dump.cpp#L1144
 # method's argument
-# similiar to method's return value, both virtual and 
+# similar to method's return value, both virtual and 
 # other methods' argument has name, type, meta, default_value    
 @dataclass
 class ClassesMethodArgument:
