@@ -1105,13 +1105,16 @@ class PyClass:  # MARK: PyClass
                 type_annotation_mode = 'comment'
                 lines.append("    " + PyMember.convert_to_string(member, type_annotation_mode = type_annotation_mode))
         else:
-            enum_const_type_list: list[PyType] = []
+            enum_const_type_list: list[PyTypeExpr] = []
             for member in pyclass.class_attributes:
+                if not member.value_expr:
+                    raise ValueError(f"Enum member '{member.name}' has no value_expr")
                 if member.value_expr.category != PyValueExprCategory.INT:
                     raise ValueError(f"Enum member '{member.name}'='{member.value_expr}' is not INT")
+                enum_const_type_list.append(member.type_expr)
             
             for enum_const_type in enum_const_type_list:
-                lines.append("    " + PyType.convert_to_string(enum_const_type, wrap_with_single_quote=False))
+                lines.append("    " + PyTypeExpr.convert_to_string(enum_const_type, wrap_with_single_quote=False))
             
         # instance members
         for member in pyclass.members:
