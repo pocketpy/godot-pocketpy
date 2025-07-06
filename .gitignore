@@ -37,5 +37,6 @@ build/
 __pycache__/
 *.pdb
 .vscode
+.cursorignore
 typings/
 src/lang/BindingsGenerated.cpp

@@ -1,8 +1,6 @@
-from typing import NamedTuple
 from .schema_gdt import *
 from .schema_py import *
 from .writer import Writer
-from collections import namedtuple
 
 
 
@@ -10,15 +8,6 @@ from collections import namedtuple
 # MARK: 通用映射
 # ===============================
 
-def _map_properties(cls_data: ClassesSingle|BuiltinClass, pyclass: PyClass) -> None:
-    """映射实例属性/成员变量"""
-    
-    for member_data in cls_data.properties or []:
-        pyclass.members.append(PyMember(
-            name=member_data.name,
-            type_expr=PyTypeExpr.get_and_add(member_data.type),
-            inline_comment=member_data.description,
-        ))
 
 def _map_methods(cls_data: ClassesSingle|BuiltinClass, pyclass: PyClass) -> None:
     """映射方法，包括普通方法和静态方法"""
@@ -34,24 +23,26 @@ def _map_methods(cls_data: ClassesSingle|BuiltinClass, pyclass: PyClass) -> None
     # 添加方法
     for method_data in cls_data.methods or []:
         is_overload = number_of_occurrences[method_data.name] > 1
-        description = []
+        descriptions: list[str] = []
         if method_data.description:
-            description.append(method_data.description)
-        if description:
-            description = '"""' + "\n".join(description) + "\n" + '"""'
-            description = description.splitlines()
+            descriptions.append(method_data.description)
+        if descriptions:
+            description = '"""' + "\n".join(descriptions) + "\n" + '"""'
+            descriptions = description.splitlines()
         
-        if isinstance(cls_data, BuiltinClass):
-            py_return_type_expr = PyTypeExpr.get_and_add(method_data.return_type) if method_data.return_type else None
-        elif isinstance(cls_data, ClassesSingle):
-            py_return_type_expr = PyTypeExpr.get_and_add(method_data.return_value.type) if method_data.return_value else None
+        if isinstance(method_data, BuiltinClassMethod):
+            return_type: str|None = method_data.return_type
+            py_return_type_expr = PyTypeExpr.get_and_add(return_type) if return_type else None
+        elif isinstance(method_data, ClassesMethod):
+            return_type: str|None = method_data.return_value.type if method_data.return_value else None
+            py_return_type_expr = PyTypeExpr.get_and_add(return_type) if return_type else None
         else:
             raise ValueError(f"Invalid class type: {cls_data}")
         
         
         pyclass.methods.append(PyMethod(
             name=method_data.name,
-            description_lines=description,
+            description_lines=descriptions,
             arguments=[],
             vararg_position=None if not method_data.is_vararg or method_data.arguments is None else len(method_data.arguments),
             return_type_expr=py_return_type_expr,
@@ -61,7 +52,7 @@ def _map_methods(cls_data: ClassesSingle|BuiltinClass, pyclass: PyClass) -> None
         
         _map_method_arguments(method_data, pyclass.methods[-1])
 
-def _map_method_arguments(method_data, pymethod: PyMethod) -> None:
+def _map_method_arguments(method_data: ClassesMethod | BuiltinClassMethod | ClassesMethodVirtual, pymethod: PyMethod) -> None:
     """映射方法参数"""
     for argument_data in method_data.arguments or []:
         pymethod.arguments.append(PyArgument(
@@ -73,48 +64,53 @@ def _map_method_arguments(method_data, pymethod: PyMethod) -> None:
             ) if argument_data.default_value else None,
         ))
 
-def _map_constants(cls_data: ClassesSingle|BuiltinClass, pyclass: PyClass) -> None:
-    """映射类常量/类属性"""
-    for class_attribute_data in cls_data.constants or []:
-        # 判断类型分别处理
-        if hasattr(class_attribute_data, "type"):
-            # BuiltinClassConstant
-            pyclass.members.append(
-                PyMember(
-                    name=class_attribute_data.name,
-                    type_expr=PyTypeExpr.get_and_add(str(class_attribute_data.type)),
-                    value_expr=PyValueExpr(
-                        value_expr=str(class_attribute_data.value),
-                        type_expr=PyTypeExpr.get_and_add(str(class_attribute_data.type)),
-                    ),
-                    inline_comment=class_attribute_data.description if hasattr(class_attribute_data, "description") else None,
-                )
-            )
-        else:
-            # ClassesConstant
-            pyclass.members.append(
-                PyMember(
-                    name=class_attribute_data.name,
-                    type_expr=PyTypeExpr.get_and_add("int"),
-                    value_expr=PyValueExpr(
-                        value_expr=str(class_attribute_data.value),
-                        type_expr=PyTypeExpr.get_and_add("int"),
-                    ),
-                    inline_comment=class_attribute_data.description if hasattr(class_attribute_data, "description") else None,
-                )
-            )
-
 
 # ===============================
 # MARK: 各自独有的映射
 # ===============================
 
+def _map_builtin_constants(constants: list[BuiltinClassConstant] | None, pyclass: PyClass) -> None:
+    """映射 BuiltinClassConstant 类型的类常量/类属性"""
+    if not constants:
+        return
+    for const in constants:
+        pyclass.members.append(
+            PyMember(
+                name=const.name,
+                type_expr=PyTypeExpr.get_and_add(str(const.type)),
+                value_expr=PyValueExpr(
+                    value_expr=str(const.value),
+                    type_expr=PyTypeExpr.get_and_add(str(const.type)),
+                ),
+                inline_comment=const.description,
+            )
+        )
+
+def _map_class_constants(constants: list[ClassesConstant] | None, pyclass: PyClass) -> None:
+    """映射 ClassesConstant 类型的类常量/类属性"""
+    if not constants:
+        return
+    for const in constants:
+        pyclass.members.append(
+            PyMember(
+                name=const.name,
+                type_expr=PyTypeExpr.get_and_add("int"),
+                value_expr=PyValueExpr(
+                    value_expr=str(const.value),
+                    type_expr=PyTypeExpr.get_and_add("int"),
+                ),
+                inline_comment=const.description,
+            )
+        )
+
+
+
 def _map_signals(cls_data: ClassesSingle, pyclass: PyClass) -> None:
     """映射信号（特殊类型的类属性）"""
     for signal_data in cls_data.signals or []:
         # 创建信号类型表达式
-        arg_types = []
-        arg_comments = []
+        arg_types: list[PyTypeExpr] = []
+        arg_comments: list[str] = []
         
         for arg in signal_data.arguments or []:
             arg_types.append(PyTypeExpr.get_and_add(arg.type))
@@ -190,6 +186,19 @@ def _map_enum(enum_data: GlobalEnum|ClassesEnum|BuiltinClassEnum, pyclass: PyCla
             inline_comment=enum_value_data.description,
         ))
 
+
+
+def _map_class_properties(properties: list[ClassesProperty] | None, pyclass: PyClass) -> None:
+    """映射 ClassesProperty 类型的实例属性/成员变量"""
+    if not properties:
+        return
+    for member_data in properties:
+        pyclass.members.append(PyMember(
+            name=member_data.name,
+            type_expr=PyTypeExpr.get_and_add(member_data.type),
+            inline_comment=member_data.description,
+        ))
+
 # ===============================
 # 入口
 # ===============================
@@ -242,32 +251,7 @@ def map_gdt_to_py(gdt_all_in_one: GodotInOne) -> MapResult:
             '    @property',
             '    def owner(self) -> T: ...',
             '',
-            'def Extends[T: _typings.Object](cls: GDNativeClass[T]) -> type[Script[T]]:',
-            '    \"\"\"',
-            '    Creates a Python script class that extends a Godot native class.',
-            '    This function allows you to create Python classes that inherit from Godot\'s built-in',
-            '    Object-derived classes such as Node, Resource, etc. It cannot be used to extend',
-            '    built-in types that are not derived from Object (like Vector2, String, etc).',
-            '    Args:',
-            '        cls (GDNativeClass[T]): The Godot native class to extend. Must be a class',
-            '                                    derived from Object (e.g., Node, Resource).',
-            '    Returns:',
-            '        type[Script[T]]: A base class for your Python script, which will be properly',
-            '                        integrated with Godot\'s scripting system.',
-            '    Example:',
-            '        ```python',
-            '        class MyNode(Extends(Node)):',
-            '            def _ready(self):',
-            '                print("Node is ready!")',
-            '        class MyResource(Extends(Resource)):',
-            '            def _init(self):',
-            '                self.data = "Hello, World!"',
-            '        ```',
-            '    Note:',
-            '        You can only extend native classes derived from Object. Attempting to extend',
-            '    built-in types like Vector2, Dictionary, or String will result in an error.',
-            '    \"\"\"',
-            '    ...',
+            'def Extends[T: _typings.Object](cls: GDNativeClass[T]) -> type[Script[T]]: ...',
             ],
             global_variables=[],
         ),
@@ -295,62 +279,54 @@ def map_gdt_to_py(gdt_all_in_one: GodotInOne) -> MapResult:
     # ===============================
     # MARK: class single
     # ===============================
-    class_single_classes = []
+    class_single_classes: list[PyClass] = []
     for cls_data in gdt_all_in_one.classes:
-        
-        description = []
+        descriptions: list[str] = []
         if cls_data.brief_description:
-            description.append(cls_data.brief_description)
+            descriptions.append(cls_data.brief_description)
         if cls_data.description:
-            description.append(cls_data.description)
-        if description:
-            description = '"""' + "\n".join(description) + "\n" + '"""'
-            description = description.splitlines()
-        
+            descriptions.append(cls_data.description)
+        if descriptions:
+            description = '"""' + "\n".join(descriptions) + "\n" + '"""'
+            descriptions = description.splitlines()
         pyclass = PyClass(
             type=PyType.get(cls_data.name),
-            description_lines = description,
+            description_lines = descriptions,
             members = [],
             class_attributes = [],
             methods = [],
         )
-        
         # 处理各种属性
-        _map_properties(cls_data, pyclass)
+        _map_class_properties(cls_data.properties, pyclass)
         _map_methods(cls_data, pyclass)
-        _map_constants(cls_data, pyclass)
+        _map_class_constants(cls_data.constants, pyclass)
         _map_signals(cls_data, pyclass)
-        
         class_single_classes.append(pyclass)
-    
-    
+
     # ===============================
     # MARK: builtin class
     # ===============================
-    builtin_classes = []
+    builtin_classes: list[PyClass] = []
     for cls_data in gdt_all_in_one.builtin_classes:
-        description = []
+        descriptions: list[str] = []
         if cls_data.brief_description:
-            description.append(cls_data.brief_description)
+            descriptions.append(cls_data.brief_description)
         if cls_data.description:
-            description.append(cls_data.description)
-        if description:
-            description = '"""' + "\n".join(description) + "\n" + '"""'
-            description = description.splitlines()
-        
+            descriptions.append(cls_data.description)
+        if descriptions:
+            description = '"""' + "\n".join(descriptions) + "\n" + '"""'
+            descriptions = description.splitlines()
         pyclass = PyClass(
             type=PyType.get(cls_data.name),
-            description_lines=description,
+            description_lines=descriptions,
             members=[],
             class_attributes=[],
             methods=[],
         )
-        
         # 处理各种属性
         _map_methods(cls_data, pyclass)
-        _map_constants(cls_data, pyclass)
+        _map_builtin_constants(cls_data.constants, pyclass)
         _map_operators(cls_data, pyclass)
-                
         builtin_classes.append(pyclass)
     
     
@@ -361,16 +337,16 @@ def map_gdt_to_py(gdt_all_in_one: GodotInOne) -> MapResult:
     # --- global enum ---
     enum_classes = []
     for enum_data in gdt_all_in_one.global_enums:
-        description = []
+        descriptions: list[str] = []
         if enum_data.description:
-            description.append(enum_data.description)
-        if description:
-            description = '"""' + "\n" + "\n".join(description) + "\n" + '"""'
-            description = description.splitlines()
+            descriptions.append(enum_data.description)
+        if descriptions:
+            description = '"""' + "\n" + "\n".join(descriptions) + "\n" + '"""'
+            descriptions = description.splitlines()
         
         pyclass = PyClass(
             type=PyType.get(enum_data.name),
-            description_lines=description,
+            description_lines=descriptions,
             members=[],
             class_attributes=[],
             methods=[],
@@ -385,18 +361,18 @@ def map_gdt_to_py(gdt_all_in_one: GodotInOne) -> MapResult:
     folded_enums = [(cls_data.name, cls_data.enums) for cls_data in gdt_all_in_one.classes]
     flattened_enums = [(cls_name, enum_data) for cls_name, enums in folded_enums for enum_data in enums or []]
     
-    enum_classes = []
+    enum_classes: list[PyClass] = []
     for cls_name, enum_data in flattened_enums:
-        description = []
+        descriptions: list[str] = []
         if enum_data.description:
-            description.append(enum_data.description)
-        if description:
-            description = '"""' + "\n" + "\n".join(description) + "\n" + '"""'
-            description = description.splitlines()
+            descriptions.append(enum_data.description)
+        if descriptions:
+            description = '"""' + "\n" + "\n".join(descriptions) + "\n" + '"""'
+            descriptions = description.splitlines()
             
         pyclass = PyClass(
             type=PyType.get(cls_name + '__' + enum_data.name),
-            description_lines=description,
+            description_lines=descriptions,
             members=[],
             class_attributes=[],
             methods=[],
@@ -414,16 +390,16 @@ def map_gdt_to_py(gdt_all_in_one: GodotInOne) -> MapResult:
     flattened_enums = [(cls_name, enum_data) for cls_name, enums in folded_enums for enum_data in enums or []]
     enum_classes = []
     for cls_name, enum_data in flattened_enums:
-        description = []
+        descriptions: list[str] = []
         if enum_data.description:
-            description.append(enum_data.description)
-        if description:
-            description = '"""' + "\n" + "\n".join(description) + "\n" + '"""'
-            description = description.splitlines()
+            descriptions.append(enum_data.description)
+        if descriptions:
+            description = '"""' + "\n" + "\n".join(descriptions) + "\n" + '"""'
+            descriptions = description.splitlines()
 
         pyclass = PyClass(
             type=PyType.get(cls_name + '__' + enum_data.name),
-            description_lines=description,
+            description_lines=descriptions,
             members=[],
             class_attributes=[],
             methods=[],
@@ -442,7 +418,7 @@ def map_gdt_to_py(gdt_all_in_one: GodotInOne) -> MapResult:
     #   Engine = GDNativeSingleton[_typings.Engine]('Engine')
     for pytype in PyType.ALL_TYPES.values():
         if pytype.category == PyTypeCategory.SINGLETON_GODOT_NATIVE:
-            map_result.init_pyi.global_variables.append(PyMember(
+            map_result.init_pyi.global_variables.append(SpecifiedPyMember(
                 specified_string=f'{pytype.name} = GDNativeSingleton[_typings.{pytype.name}](\'{pytype.name}\')',
             ))
             if pytype.name == 'ClassDB':
@@ -453,7 +429,7 @@ def map_gdt_to_py(gdt_all_in_one: GodotInOne) -> MapResult:
     c_writer.write('')
     for pytype in PyType.ALL_TYPES.values():
         if pytype.category == PyTypeCategory.GODOT_NATIVE:
-            map_result.init_pyi.global_variables.append(PyMember(
+            map_result.init_pyi.global_variables.append(SpecifiedPyMember(
                 specified_string=f'{pytype.name} = GDNativeClass[_typings.{pytype.name}](\'{pytype.name}\')',
             ))
             c_writer.write(f'register_GDNativeClass("{pytype.name}");')
@@ -484,7 +460,7 @@ def map_gdt_to_py(gdt_all_in_one: GodotInOne) -> MapResult:
     map_result.typings_pyi.classes.append(pyclass)
     
     #   intptr
-    map_result.typings_pyi.global_variables.append(PyMember(
+    map_result.typings_pyi.global_variables.append(SpecifiedPyMember(
         specified_string='intptr = int',
         inline_comment='intptr is a pointer to an unknown type (const void*)',
     ))
