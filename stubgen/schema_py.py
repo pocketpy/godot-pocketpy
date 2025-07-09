@@ -1297,11 +1297,7 @@ class PyFile:  # MARK: PyFile
     global_variables: list[PyMember|SpecifiedPyMember] = field(default_factory=list)
     global_functions: list[PyMethod] = field(default_factory=list)
     classes: list[PyClass] = field(default_factory=list)
-    
-    IGNORED_GLOBAL_VARIABLES = [
-        "Script"
-    ]
-    
+
     @staticmethod
     def convert_to_lines(pyfile: 'PyFile', wrap_with_single_quote: bool = True) -> list[str]:
         lines: list[str] = []
@@ -1323,7 +1319,7 @@ class PyFile:  # MARK: PyFile
         # global variables
         for variable in pyfile.global_variables: 
             if isinstance(variable, SpecifiedPyMember):
-                if SpecifiedPyMember.convert_to_string(variable).split('=')[0].strip() in PyFile.IGNORED_GLOBAL_VARIABLES: 
+                if SpecifiedPyMember.convert_to_string(variable).startswith('Script:'): 
                     continue
                  
             

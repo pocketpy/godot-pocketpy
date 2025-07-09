@@ -504,7 +504,7 @@ def map_gdt_to_py(gdt_all_in_one: GodotInOne) -> MapResult:
         if pytype.category == PyTypeCategory.GODOT_NATIVE:
             map_result.init_pyi.global_variables.append(
                 SpecifiedPyMember(
-                    specified_string=f"{pytype.name} = GDNativeClass[_typings.{pytype.name}]('{pytype.name}')",
+                    specified_string=f"{pytype.name}: GDNativeClass[_typings.{pytype.name}]",
                 )
             )
             c_writer.write(f'register_GDNativeClass("{pytype.name}");')
