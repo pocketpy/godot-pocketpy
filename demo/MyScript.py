@@ -8,6 +8,7 @@ class MyScript(Extends(Node)):
 
 	def __init__(self):
 		print("__init__()")
+		print(Projection.Planes, Projection.Planes.PLANE_NEAR)
 		#print("==>", self.x, self.y, self.z, self.w)
 
 	def _ready(self):

@@ -11,6 +11,11 @@ macos.double.debug = "bin/macos/libgodot-pocketpy.macos.template_debug.double.dy
 macos.single.release = "bin/macos/libgodot-pocketpy.macos.template_release.dylib"
 macos.double.release = "bin/macos/libgodot-pocketpy.macos.template_debug.double.dylib"
 
+macos.arm64.single.debug = "bin/macos/libgodot-pocketpy.macos.template_debug.arm64.dylib"
+macos.arm64.double.debug = "bin/macos/libgodot-pocketpy.macos.template_debug.double.arm64.dylib"
+macos.arm64.single.release = "bin/macos/libgodot-pocketpy.macos.template_release.arm64.dylib"
+macos.arm64.double.release = "bin/macos/libgodot-pocketpy.macos.template_debug.double.arm64.dylib"
+
 ios.arm64.single.debug = "bin/ios/libgodot-pocketpy.ios.template_debug.arm64.dylib"
 ios.arm64.double.debug = "bin/ios/libgodot-pocketpy.ios.template_debug.arm64.double.dylib"
 ios.arm64.single.release = "bin/ios/libgodot-pocketpy.ios.template_release.arm64.dylib"
