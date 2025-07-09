@@ -1329,7 +1329,7 @@ class PyFile:  # MARK: PyFile
             
             
             lines.append(PyMember.convert_to_string(variable, wrap_with_single_quote=wrap_with_single_quote) if isinstance(variable, PyMember) else SpecifiedPyMember.convert_to_string(variable))
-            lines.append('')
+            # lines.append('')
         
         # global functions
         for function in pyfile.global_functions:

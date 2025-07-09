@@ -303,9 +303,6 @@ def map_gdt_to_py(gdt_all_in_one: GodotInOne) -> MapResult:
                 "from . import typings as _typings",
                 "",
                 "",
-                "class GDNativeSingleton[T: _typings.Object]:",
-                "    def __init__(self, name: str): ...",
-                "",
                 "class GDNativeClass[T: _typings.Variant]:",
                 "    def __init__(self, name: str): ...",
                 "",
@@ -326,10 +323,10 @@ def map_gdt_to_py(gdt_all_in_one: GodotInOne) -> MapResult:
     for pytype in PyType.ALL_TYPES.values():
         if pytype.category == PyTypeCategory.SINGLETON_GODOT_NATIVE:
             if pytype.name == "ClassDB":
-                # TODO: implement ClassDB singleton
-                continue
-            s1 = re.sub("(.)([A-Z][a-z0-9]+)", r"\1_\2", pytype.name)
-            header_name = re.sub("([a-z])([A-Z])", r"\1_\2", s1).lower()
+                header_name = 'class_db_singleton'
+            else:
+                s1 = re.sub("(.)([A-Z][a-z0-9]+)", r"\1_\2", pytype.name)
+                header_name = re.sub("([a-z])([A-Z])", r"\1_\2", s1).lower()
             c_writer.write(f"#include <godot_cpp/classes/{header_name}.hpp>")
 
     c_writer.write("")
@@ -491,14 +488,15 @@ def map_gdt_to_py(gdt_all_in_one: GodotInOne) -> MapResult:
         if pytype.category == PyTypeCategory.SINGLETON_GODOT_NATIVE:
             map_result.init_pyi.global_variables.append(
                 SpecifiedPyMember(
-                    specified_string=f"{pytype.name} = GDNativeSingleton[_typings.{pytype.name}]('{pytype.name}')",
+                    specified_string=f"{pytype.name}: _typings.{pytype.name}",
                 )
             )
-            if pytype.name == "ClassDB":
-                # TODO: implement ClassDB singleton
-                continue
+
+            cpp_name = pytype.name
+            if cpp_name == "ClassDB":
+                cpp_name = "ClassDBSingleton"
             c_writer.write(
-                f'register_GDNativeSingleton("{pytype.name}", {pytype.name}::get_singleton());'
+                f'register_GDNativeSingleton("{pytype.name}", {cpp_name}::get_singleton());'
             )
 
     c_writer.write("")
