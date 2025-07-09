@@ -70,11 +70,17 @@ endif()
 target_link_libraries(${LIBNAME} PRIVATE godot-cpp)
 target_link_libraries(${LIBNAME} PRIVATE pocketpy)
 
+set(GODOT_PROJECT_BINARY_DIR "${PROJECT_SOURCE_DIR}/${GODOT_PROJECT_DIR}/addons/godot-pocketpy/bin/${GODOTCPP_PLATFORM}")
+
 set_target_properties(${LIBNAME}
     PROPERTIES
     # The generator expression here prevents msvc from adding a Debug or Release subdir.
-    RUNTIME_OUTPUT_DIRECTORY "$<1:${PROJECT_SOURCE_DIR}/${GODOT_PROJECT_DIR}/addons/godot-pocketpy/bin/${GODOTCPP_PLATFORM}>"
+    RUNTIME_OUTPUT_DIRECTORY "$<1:${GODOT_PROJECT_BINARY_DIR}>"
 
     PREFIX ""
     OUTPUT_NAME "${LIBNAME}${GODOTCPP_SUFFIX}"
+)
+
+add_custom_command(TARGET ${LIBNAME} POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_FILE:${LIBNAME}>" "${GODOT_PROJECT_BINARY_DIR}/$<TARGET_FILE_NAME:${LIBNAME}>"
 )
