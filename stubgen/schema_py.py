@@ -2,7 +2,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from functools import cached_property
 import re
-from typing import ClassVar, Literal, override
+from typing import ClassVar, Literal
 
 
 from .tools import validate_types_on_init, ValidatorResults, DEBUG, build_dependency_graph, topological_sort
@@ -75,15 +75,18 @@ class PyType:  # MARK: PyType
     SUPPORT_GENERIC_TYPES: ClassVar[set['PyType']] = set()
     
     # 子类查找缓存
-    _SUBCLASSES_CACHE: ClassVar[dict[str, list['PyType']]] = {}
+    _SUBCLASSES_CACHE: ClassVar[dict[str, set['PyType']]] = {}
+    
+    # 父类查找缓存
+    _SUPERCLASSES_CACHE: ClassVar[dict[str, set['PyType']]] = {}
     
     inherit: 'PyType | None' = field(default=None)
     
-    @override
+    
     def __hash__(self) -> int:
         return hash(self.name)
     
-    @override
+    
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, PyType):
             return False
@@ -110,7 +113,7 @@ class PyType:  # MARK: PyType
             if raise_error:
                 # 按首字母分组打印类型名
                 type_names = sorted(PyType.ALL_TYPES.keys())
-                grouped_types = {}
+                grouped_types: dict[str, list[str]] = {}
                 for type_name in type_names:
                     first_letter = type_name[0].upper()
                     if first_letter not in grouped_types:
@@ -164,7 +167,28 @@ class PyType:  # MARK: PyType
         
     
     @classmethod
-    def get_subclasses(cls, base_type: 'PyType') -> list['PyType']:
+    def get_superclasses(cls, base_type: 'PyType', include_basetype: bool=False) -> set['PyType']:
+        '''获取所有父类'''
+        # 检查缓存中是否已有结果
+        
+            
+            
+        if base_type in cls._SUPERCLASSES_CACHE:
+            return cls._SUPERCLASSES_CACHE[base_type.name]
+        
+        superclasses = set([] if not include_basetype else [base_type])    
+        
+        if base_type.inherit:
+            superclasses.add(base_type.inherit)
+            superclasses.update(cls.get_superclasses(base_type.inherit, include_basetype=include_basetype))
+        
+        cls._SUPERCLASSES_CACHE[base_type.name] = superclasses
+        
+
+        return superclasses
+    
+    @classmethod
+    def get_subclasses(cls, base_type: 'PyType', include_basetype: bool=False) -> set['PyType']:
         '''
         返回所有继承自 base_type 的 PyType 列表
         '''
@@ -172,16 +196,16 @@ class PyType:  # MARK: PyType
         if base_type.name in cls._SUBCLASSES_CACHE:
             return cls._SUBCLASSES_CACHE[base_type.name]
             
-        subclasses = []
+        subclasses: set['PyType'] = set([] if include_basetype else [base_type])
         
         # 直接子类
         direct_subclasses = [t for t in cls.ALL_TYPES.values() if t.inherit == base_type]
         
         # 递归查找所有子类
         for subclass in direct_subclasses:
-            subclasses.append(subclass)
+            subclasses.add(subclass)
             # 递归获取子类的子类
-            subclasses.extend(cls.get_subclasses(subclass))
+            subclasses.update(cls.get_subclasses(subclass, include_basetype=include_basetype))
         
         # 将结果存入缓存
         cls._SUBCLASSES_CACHE[base_type.name] = subclasses
@@ -304,7 +328,7 @@ class PyType:  # MARK: PyType
             return name.replace('bitfield::', '').replace('.', "__")
         
         # typedarray
-        if name.startswith('typedarray::'):
+        if name.startswith('typedarray::') or name == 'typedarray':
             return "Array"
         
         # 正常类型(名字合法的内置类型和原生类型)
@@ -334,7 +358,7 @@ class PyType:  # MARK: PyType
     @staticmethod
     def convert_to_string(pytype: 'PyType', wrap_with_single_quote: bool = True) -> str:
         if wrap_with_single_quote:
-            return "'" + pytype.name + "'"
+            return "'" + pytype.name + "'" 
         else:
             return pytype.name
     
@@ -344,11 +368,100 @@ class PyType:  # MARK: PyType
         results.append(bool(re.fullmatch(r'[A-Za-z0-9_]+', pytype.name)))
         return results.result()
 
+@dataclass
+class _GenericType:  # MARK: _GenericType
+    '''
+    typedarray::xxx  --> Array[xxx]
+    typedarray::21/9:xxx  --> Array[xxx]
+    typedarray::21/9:  --> Array
+    typedarray::xxx  --> Array[xxx]
+    
+    aaa -> aaa
+    
+    '''
+    generic_pytype: PyType
+    type_arg: '_UnionType | None'
+    
+    def child_validate(self) -> bool:
+        return PyType.validate(self.generic_pytype) and (self.type_arg is None or self.type_arg.child_validate())
 
+    
+    def child_convert_to_string(self) -> str:
+        if self.type_arg:
+            return f"{self.generic_pytype.name}[{self.type_arg.child_convert_to_string()}]"
+        else:
+            return self.generic_pytype.name
+    
+    
+    @staticmethod
+    def child_parse_type(expr: str) -> '_GenericType':
+        
+        # 目前只有typedarray支持泛型
+        if expr.startswith('typedarray::'):
+            
+            # typedarray::21/9:xxx  --> Array[xxx]
+            if bool(re.fullmatch(r'typedarray::[0-9]*/[0-9]*:[A-Za-z0-9_]+', expr)):
+                match = re.search(r'[0-9]*/[0-9]*:', expr)
+                inner_type_expr = expr.replace('typedarray::', '')
+                if match:
+                    inner_type_expr = inner_type_expr.replace(match.group(), '')
+                else:
+                    raise ValueError(f"Invalid typedarray expression: {expr}")
+                return _GenericType(PyType.get('Array'), _UnionType.child_parse_type(inner_type_expr))
+            
+            # typedarray::21/9:  --> Array
+            if bool(re.fullmatch(r'typedarray::[0-9]*/[0-9]*:', expr)):
+                return _GenericType(PyType.get('Array'), None)
+            
+            # typedarray::xxx  --> Array[xxx]
+            match = re.search(r'typedarray::[A-Za-z_]+', expr)
+            inner_type_expr = expr.replace('typedarray::', '')
+            if match:
+                inner_type_expr = inner_type_expr.replace(match.group(), '')
+            else:
+                raise ValueError(f"Invalid typedarray expression: {expr}")
+            return _GenericType(PyType.get('Array'), _UnionType.child_parse_type(inner_type_expr))
+        
+        elif PyType.get(expr):
+            return _GenericType(PyType.get(expr), None)
+        
+        raise ValueError(f"Unknown type: {expr}")
+    
+    
+    def child_get_used_types(self) -> set[PyType]:
+        if self.type_arg:
+            return set([self.generic_pytype]).union(self.type_arg.child_get_used_types())
+        else:
+            return set([self.generic_pytype])
+
+    
+    def child_is_type_matched(self, pytype: 'PyType') -> bool:
+        result = pytype in PyType.get_superclasses(self.generic_pytype, include_basetype=True)
+        return result
 @dataclass
 class _ICompositeType:  # MARK: _ICompositeType
     
-    def convert_to_string(self) -> str:
+    @staticmethod
+    def union(composite_type: '_ICompositeType', pytype: 'PyType')-> '_ICompositeType':
+        if isinstance(composite_type, _SignalType):
+            raise ValueError(f"Cannot union {composite_type} with {pytype}")
+        elif isinstance(composite_type, _UnionType):
+            return _UnionType(composite_type.types + [_GenericType(pytype, None)])
+        else:
+            raise ValueError(f"Unknown composite type: {composite_type}")
+    
+
+    
+    @staticmethod
+    def convert_to_string_with_comment(composite_type: '_ICompositeType') -> tuple[str, str|None]:  # type expr, inline comment(if is _SignalType)
+        if isinstance(composite_type, _SignalType):
+            return composite_type.child_convert_to_string(), composite_type.child_get_inline_comment()
+        elif isinstance(composite_type, _UnionType):
+            return composite_type.child_convert_to_string(), None
+        else:
+            raise ValueError(f"Unknown composite type: {composite_type}")
+    
+    def child_convert_to_string(self) -> str:
         raise NotImplementedError
     
     @staticmethod
@@ -358,27 +471,38 @@ class _ICompositeType:  # MARK: _ICompositeType
         # 首先尝试解析 Signal 类型
         if expr.startswith('Signal('):
             
-            return _SignalType.parse_type(expr)
+            return _SignalType.child_parse_type(expr)
                 
                 
         # 如果不是 Signal 类型，则交给 _UnionType 解析
-        return _UnionType.parse_type(expr)  # 我们选择将_UnionType放在最外边
+        return _UnionType.child_parse_type(expr)  # 我们选择将_UnionType放在最外边
     
-    def get_used_types(self) -> set[PyType]:
+    @staticmethod
+    def get_types(composite_type: '_ICompositeType') -> set[PyType]:
+        return _ICompositeType.child_get_types(composite_type)
+    
+    def child_get_types(self) -> set[PyType]:
+        raise NotImplementedError
+    
+    @staticmethod
+    def get_used_types(composite_type: '_ICompositeType') -> set[PyType]:
+        return composite_type.child_get_used_types()
+    
+    def child_get_used_types(self) -> set[PyType]:
         raise NotImplementedError
 
     @staticmethod
     def is_type_matched(pytype: 'PyType', composite_type: '_ICompositeType') -> bool:
-        return composite_type.is_type_matched(pytype)
+        return composite_type.child_is_type_matched(pytype)
     
-    def is_type_matched(self, pytype: 'PyType') -> bool:
+    def child_is_type_matched(self, pytype: 'PyType') -> bool:
         raise NotImplementedError
     
     @staticmethod
     def validate(composite_type: '_ICompositeType') -> bool:
-        return composite_type.validate()
+        return composite_type.child_validate()
     
-    def validate(self) -> bool:
+    def child_validate(self) -> bool:
         raise NotImplementedError
 
 @dataclass
@@ -396,23 +520,23 @@ class _UnionType(_ICompositeType):  # MARK: _UnionType
     '''
     types: list['_GenericType']
     
-    @override
-    def validate(self) -> bool:
-        return all(type.validate() for type in self.types)
-
-    @override
-    def convert_to_string(self) -> str:
-        return f"{'|'.join([type.convert_to_string() for type in self.types])}"
     
-    @override
+    def child_validate(self) -> bool:
+        return all(type.child_validate() for type in self.types)
+
+    
+    def child_convert_to_string(self) -> str:
+        return f"{'|'.join([type.child_convert_to_string() for type in self.types])}"
+    
+    
     @staticmethod
-    def parse_type(expr: str) -> '_UnionType':
+    def child_parse_type(expr: str) -> '_UnionType':
         union_exprs = [sub_expr.strip() for sub_expr in expr.split(",")]
         
         if len(union_exprs) == 1:
-            return _UnionType([_GenericType.parse_type(expr)])  # 原子类型, 停止递归
+            return _UnionType([_GenericType.child_parse_type(expr)])  # 原子类型, 停止递归
         
-        union_results = []
+        union_results: list[_GenericType] = []
         
         #  xxx, -aaa, -bbb, -ccc 模式
         symbol_list: list[str] = []
@@ -426,7 +550,7 @@ class _UnionType(_ICompositeType):  # MARK: _UnionType
         if symbol_list[0] == '+' and all(symbol == '-' for symbol in symbol_list[1:]):
             # 排除模式：第一个是基类，其他都是要排除的子类
             base_type = PyType.get(union_exprs[0])
-            all_subclasses = PyType.get_subclasses(base_type)
+            all_subclasses = list(PyType.get_subclasses(base_type))
             all_types = [base_type] + all_subclasses
             
             # 要排除的类型
@@ -438,132 +562,89 @@ class _UnionType(_ICompositeType):  # MARK: _UnionType
         else:
             # 普通的联合类型 "aaa,bbb,ccc" 模式
             for union_expr in union_exprs:
-                union_results.append(_GenericType.parse_type(union_expr))
+                union_results.append(_GenericType.child_parse_type(union_expr))
         
         return _UnionType(union_results)  # 联合类型, 增加分支并继续递归
 
-    @override
-    def get_used_types(self) -> set[PyType]:
-        return set().union(*[type.get_used_types() for type in self.types])
     
-    @override
-    def is_type_matched(self, pytype: 'PyType') -> bool:
-        return any(type.is_type_matched(pytype) for type in self.types)
-
-@dataclass
-class _GenericType(_ICompositeType):  # MARK: _GenericType
-    '''
-    typedarray::xxx  --> Array[xxx]
-    typedarray::21/9:xxx  --> Array[xxx]
-    typedarray::21/9:  --> Array
-    typedarray::xxx  --> Array[xxx]
+    def child_get_types(self):
+        return set(t.generic_pytype for t in self.types)
     
-    aaa -> aaa
+    def child_get_used_types(self) -> set[PyType]:
+        return set[PyType]().union(*[_type.child_get_used_types() for _type in self.types])
     
-    '''
-    generic_pytype: PyType
-    type_arg: '_UnionType | None'
     
-    @override
-    def validate(self) -> bool:
-        return PyType.validate(self.generic_pytype) and (self.type_arg is None or self.type_arg.validate())
-
-    @override
-    def convert_to_string(self) -> str:
-        if self.type_arg:
-            return f"{self.generic_pytype.name}[{self.type_arg.convert_to_string()}]"
-        else:
-            return self.generic_pytype.name
-    
-    @override
-    @staticmethod
-    def parse_type(expr: str) -> '_GenericType':
-        
-        # 目前只有typedarray支持泛型
-        if expr.startswith('typedarray::'):
-            
-            # typedarray::21/9:xxx  --> Array[xxx]
-            if bool(re.fullmatch(r'typedarray::[0-9]*/[0-9]*:[A-Za-z0-9_]+', expr)):
-                inner_type_expr = expr.replace('typedarray::', '').replace(re.search(r'[0-9]*/[0-9]*:', expr).group(), '')
-                return _GenericType(PyType.get('Array'), _UnionType.parse_type(inner_type_expr))
-            
-            # typedarray::21/9:  --> Array
-            if bool(re.fullmatch(r'typedarray::[0-9]*/[0-9]*:', expr)):
-                return _GenericType(PyType.get('Array'), None)
-            
-            # typedarray::xxx  --> Array[xxx]
-            inner_type_expr = expr.replace('typedarray::', '')
-            return _GenericType(PyType.get('Array'), _UnionType.parse_type(inner_type_expr))
-        
-        elif PyType.get(expr):
-            return _GenericType(PyType.get(expr), None)
-        
-        raise ValueError(f"Unknown type: {expr}")
-    
-    @override
-    def get_used_types(self) -> set[PyType]:
-        if self.type_arg:
-            return set([self.generic_pytype]).union(self.type_arg.get_used_types())
-        else:
-            return set([self.generic_pytype])
-
-    @override
-    def is_type_matched(self, pytype: 'PyType') -> bool:
-        return pytype in PyType.get_subclasses(self.generic_pytype) or pytype == self.generic_pytype
-    
+    def child_is_type_matched(self, pytype: 'PyType') -> bool:
+        result = any(type.child_is_type_matched(pytype) for type in self.types)
+        return  result
 @dataclass
 class _SignalType(_ICompositeType):  # MARK: _SignalType
     '''
     Signal[Callable[[xxx, xxx, ...], xxx]] -> Signal[typing.Callable[[xxx, xxx, ...], xxx]]
     '''
     return_type: _UnionType
-    arguments: list[_UnionType]
+    arguments: list[tuple[str, _UnionType]]
     
-    @override
-    def validate(self) -> bool:
-        return self.return_type.validate() and all(arg.validate() for arg in self.arguments)
+
+    def child_validate(self) -> bool:
+        return self.return_type.child_validate() and all(arg[1].child_validate() for arg in self.arguments)
     
-    @override
-    def convert_to_string(self) -> str:
+    
+    def child_convert_to_string(self) -> str:
         if not self.arguments:
-            return f"Signal[{self.return_type.convert_to_string()}]"
+            return f"Signal[typing.Callable[[], {self.return_type.child_convert_to_string()}]]"
         
-        args_str = ", ".join([arg.convert_to_string() for arg in self.arguments])
-        return f"Signal[typing.Callable[[{args_str}], {self.return_type.convert_to_string()}]]"
+        args_str = ", ".join([arg[1].child_convert_to_string() for arg in self.arguments])
+        return f"Signal[typing.Callable[[{args_str}], {self.return_type.child_convert_to_string()}]]"
     
-    @override
+    def child_get_inline_comment(self) -> str:
+        colon=':'
+        return f"({', '.join([arg[0] + colon + arg[1].child_convert_to_string() for arg in self.arguments])}) -> {self.return_type.child_convert_to_string()}"
+    
     @staticmethod
-    def parse_type(expr: str) -> '_SignalType':
+    def child_parse_type(expr: str) -> '_SignalType':
         # 检查是否是符合 Signal[Callable[xxx|xxx|xxx|..., xxx]] 格式
         match = re.match(r'Signal\(Callable\(\((.*?)\), ([A-Za-z0-9_]+)\)\)', expr)
         if not match:
             raise ValueError(f"Invalid Signal type format --->{expr}<---")
         
-        args_matched = [arg.strip() for arg in match.group(1).split('|')] if '|' in match.group(1) else []
-        return_type_matched = match.group(2).strip()
+        # 处理参数部分，对于空参数情况也能正确处理
+        args_part = match.group(1).strip()
+        args_matched: list[str] = []
+        if args_part:  # 只有当参数部分非空时才分割
+            args_matched = [arg.strip() for arg in args_part.split('|')]
+        return_type_matched: str = match.group(2).strip()
 
         # 解析参数列表
-        arg_types = []
-        if args_matched:
-            for arg in args_matched:
-                arg_types.append(_UnionType.parse_type(arg))
+        args: list[tuple[str, _UnionType]] = []
+        for arg in args_matched:
+            
+            if not re.match(r'[A-Za-z0-9_]+:[A-Za-z0-9_]+', arg):
+                raise ValueError(f"Invalid Signal type format --->{expr}<---, when parsing arg: --->{arg}<---")
+            
+            args.append((arg.split(':')[0], _UnionType.child_parse_type(arg.split(':')[1])))
         
         # 解析返回类型
-        return_type = _UnionType.parse_type(return_type_matched)
+        return_type = _UnionType.child_parse_type(return_type_matched)
         
-        return _SignalType(return_type, arg_types)
+        return _SignalType(return_type, args)
 
-    @override
-    def get_used_types(self) -> set[PyType]:
+    
+    def child_get_types(self):
+        return set([PyType.get('Signal')])
+    
+    def child_get_used_types(self) -> set[PyType]:
         used_types: set[PyType] = set()
-        used_types.update(self.return_type.get_used_types())
+        used_types.update(self.return_type.child_get_used_types())
         for arg in self.arguments:
-            used_types.update(arg.get_used_types())
+            used_types.update(arg[1].child_get_used_types())
         return used_types
     
-    @override
-    def is_type_matched(self, pytype: 'PyType') -> bool:
-        return pytype is PyType.get('Signal')
+    
+    def child_is_type_matched(self, pytype: 'PyType') -> bool:
+        result = pytype in PyType.get_superclasses(PyType.get('Signal'))
+        return result
+
 
 
 @validate_types_on_init
@@ -578,6 +659,16 @@ class PyTypeExpr:  # MARK: PyTypeExpr
         
     ALL_TYPE_EXPRS: ClassVar[dict[str, 'PyTypeExpr']] = {}
     
+    
+    @staticmethod
+    def get_types(pytype_expr: 'PyTypeExpr') -> set[PyType]:
+        return _ICompositeType.get_types(pytype_expr.composite_types)
+    
+    @staticmethod
+    def union(pytype_expr1: 'PyTypeExpr', pytype: 'PyType')-> 'PyTypeExpr':
+        return PyTypeExpr(_ICompositeType.union(pytype_expr1.composite_types, pytype))
+        
+    
     @classmethod
     def get(cls, expr: str) -> 'PyTypeExpr':
         if expr in cls.ALL_TYPE_EXPRS:
@@ -586,7 +677,7 @@ class PyTypeExpr:  # MARK: PyTypeExpr
             raise ValueError(f"PyTypeExpr --->{expr}<--- is not found")
 
     @classmethod
-    def get_and_add(cls, origin_expr: str) -> 'PyTypeExpr':
+    def get_and_cached(cls, origin_expr: str) -> 'PyTypeExpr':
         if origin_expr in cls.ALL_TYPE_EXPRS:
             return PyTypeExpr.get(origin_expr)
         
@@ -599,21 +690,23 @@ class PyTypeExpr:  # MARK: PyTypeExpr
     @staticmethod
     def convert_to_string(pytype_expr: 'PyTypeExpr', wrap_with_single_quote: bool = True) -> str:
         if wrap_with_single_quote:
-            return f"'{pytype_expr.composite_types.convert_to_string()}'"
+            type_expr, comment = _ICompositeType.convert_to_string_with_comment(pytype_expr.composite_types)
+            return f"'{type_expr}'" + (f" # {comment}" if comment else "")
         else:
-            return pytype_expr.composite_types.convert_to_string() 
+            type_expr, comment = _ICompositeType.convert_to_string_with_comment(pytype_expr.composite_types)
+            return type_expr + (f" # {comment}" if comment else "")
     
     @staticmethod
     def is_type_matched(pytype: 'PyType', pytype_expr: 'PyTypeExpr|None', strict: bool = True) -> bool:
         if pytype_expr is None:
             return not strict
-        return pytype_expr.composite_types.is_type_matched(pytype)
-    
-    
+        result = _ICompositeType.is_type_matched(pytype, pytype_expr.composite_types)
+        return result
+
     @staticmethod
     def get_used_types(pytype_expr: 'PyTypeExpr') -> set[PyType]:
-        used_types = set()
-        used_types.update(pytype_expr.composite_types.get_used_types())
+        used_types: set[PyType] = set()
+        used_types.update(_ICompositeType.get_used_types(pytype_expr.composite_types))
         return used_types
     
 
@@ -622,7 +715,7 @@ class PyTypeExpr:  # MARK: PyTypeExpr
     def validate(expr: 'PyTypeExpr') -> bool:
         results = ValidatorResults()
         
-        results.append(expr.composite_types.validate())
+        results.append(_ICompositeType.validate(expr.composite_types))
         return results.result()
 
 class PyValueExprCategory(Enum):
@@ -675,10 +768,10 @@ class PyValueExpr:  # MARK: PyValueExpr
             return PyValueExprCategory.OTHER_TYPE
     
     @staticmethod
-    def convert_to_string(pyvalue: 'PyValueExpr') -> str:
+    def convert_to_string(pyvalue: 'PyValueExpr', wrap_with_single_quote: bool = True) -> str:
         
         if pyvalue.category == PyValueExprCategory.NULL:
-            return 'null'
+            return 'None'
         elif pyvalue.category == PyValueExprCategory.ENUM_CONST:
             
             enum_classes: list[PyClass] = []
@@ -704,8 +797,15 @@ class PyValueExpr:  # MARK: PyValueExpr
                     
             if len(members) != 1:
                 indent = '\n\t'
-                raise ValueError(f"enum type --->{enum_type}<--- has multiple members or no members for value: --->{enum_value}<---  {indent}{indent.join(PyClass.convert_to_lines(enum_class))}")
-            return members[0].name
+                
+                # TODO 没有实现对bitfield的支持, 所以这里先打印这个错误, 然后继续执行
+                try:
+                    raise ValueError(f"enum type --->{enum_type}<--- has multiple members or no members for value: --->{enum_value}<--- but this value has been used. {indent}{indent.join(PyClass.convert_to_lines(enum_class))}")
+                except ValueError as e:
+                    print(e)
+                    return "IGNORED_ENUM_VALUE"
+                
+            return enum_class.type.name + '.' + members[0].name  # 返回枚举的名称(也即枚举体的PyMember的name)
         
         elif pyvalue.category == PyValueExprCategory.INT:
             return pyvalue.value_expr
@@ -716,14 +816,20 @@ class PyValueExpr:  # MARK: PyValueExpr
         elif pyvalue.category == PyValueExprCategory.STRING_NAME:
             return pyvalue.value_expr
         elif pyvalue.category == PyValueExprCategory.BOOL:
-            return pyvalue.value_expr
+            if pyvalue.value_expr.lower() == 'true':
+                return 'True'
+            elif pyvalue.value_expr.lower() == 'false':
+                return 'False'
+            else:
+                raise ValueError(f"value expression --->{pyvalue.value_expr}<--- is not a valid bool")
+            
         elif pyvalue.category == PyValueExprCategory.OTHER_TYPE:
             if DEBUG:
-                print(f"Warning: value expression: --->{pyvalue.value_expr}<--- type: '{PyTypeExpr.convert_to_string(pyvalue.type_expr, wrap_with_single_quote=False)}' category: {pyvalue.category} has not matched any type")
+                print(f"Warning: value expression: --->{pyvalue.value_expr}<--- type: '{PyTypeExpr.convert_to_string(pyvalue.type_expr, wrap_with_single_quote=wrap_with_single_quote) if pyvalue.type_expr else 'None'}' category: {pyvalue.category} has not matched any type")
             return "default(" + repr(pyvalue.value_expr) + ")"
         elif pyvalue.category == PyValueExprCategory.UNKNOWN:
             if DEBUG:
-                print(f"Warning: value expression: --->{pyvalue.value_expr}<--- type: '{PyTypeExpr.convert_to_string(pyvalue.type_expr, wrap_with_single_quote=False)}' category: {pyvalue.category} has not matched any type")
+                print(f"Warning: value expression: --->{pyvalue.value_expr}<--- type: '{PyTypeExpr.convert_to_string(pyvalue.type_expr, wrap_with_single_quote=wrap_with_single_quote) if pyvalue.type_expr else 'None'}' category: {pyvalue.category} has not matched any type")
             return "default(" + repr(pyvalue.value_expr) + ")"
         else:
             raise ValueError(f"Unknown category: {pyvalue.category}")
@@ -746,14 +852,31 @@ class PyArgument:  # MARK: PyArgument
     type_expr: PyTypeExpr
     default_value: PyValueExpr | None = field(default=None)
     
+    def __post_init__(self) -> None:
+        if self.default_value:
+            
+            is_object_type = PyTypeExpr.is_type_matched(PyType.get('Object'), self.type_expr)
+            is_variant_type = PyTypeExpr.is_type_matched(PyType.get('Variant'), self.type_expr)
+            is_enum_type = PyTypeExpr.is_type_matched(PyType.get('Enum'), self.type_expr)
+            
+            default_value_is_null = self.default_value.category == PyValueExprCategory.NULL
+            
+            # 不允许存在Object类型,但是默认值非null的参数, Enum例外
+            if not is_enum_type and not(not is_object_type and is_variant_type) and not default_value_is_null:
+                raise ValueError(f"argument --->{self.name}<--- has type --->{self.type_expr}<--- but has default value --->{self.default_value.value_expr}<---")
+            
+            # 如果默认值是null, 那么参数类型需要为 Xxx|None
+            if default_value_is_null:
+                self.type_expr = PyTypeExpr.union(self.type_expr, PyType.get('None'))
+    
     @staticmethod
-    def convert_to_string(argument: 'PyArgument') -> str:
+    def convert_to_string(argument: 'PyArgument', wrap_with_single_quote: bool = True) -> str:
         keyword_underline = ""
         if iskeyword(argument.name):
             keyword_underline = "_"
         if argument.default_value:
-            return f"{argument.name}{keyword_underline}: {PyTypeExpr.convert_to_string(argument.type_expr)} = {PyValueExpr.convert_to_string(argument.default_value)}"
-        return f"{argument.name}{keyword_underline}: {PyTypeExpr.convert_to_string(argument.type_expr)}"
+            return f"{argument.name}{keyword_underline}: {PyTypeExpr.convert_to_string(argument.type_expr, wrap_with_single_quote=wrap_with_single_quote)} = {PyValueExpr.convert_to_string(argument.default_value, wrap_with_single_quote=wrap_with_single_quote)}"
+        return f"{argument.name}{keyword_underline}: {PyTypeExpr.convert_to_string(argument.type_expr, wrap_with_single_quote=wrap_with_single_quote)}"
     
     @staticmethod
     def validate(argument: 'PyArgument') -> bool:
@@ -785,10 +908,11 @@ class PyMethod:  # MARK: PyMethod
     return_type_expr: PyTypeExpr | None = field(default=None)
     arguments: list[PyArgument] = field(default_factory=list)
     vararg_position: int | None = field(default=None)
-    is_static: bool = False
-    is_overload: bool = False
+    is_static: bool = False  # @staticmethod
+    is_overload: bool = False  # @overload
+    is_required: bool = False  # @abstractmethod
     
-    OPERATORS_TABLE: dict[str, str] = {
+    OPERATORS_TABLE = {  # type: ignore
     '<': '__lt__',
     '<=': '__le__',
     '>': '__gt__',
@@ -813,7 +937,7 @@ class PyMethod:  # MARK: PyMethod
     '~': '__invert__',
     }
 
-    NOT_SUPPORTED_OPERATORS: dict[str, str] = {
+    NOT_SUPPORTED_OPERATORS = {  # type: ignore
         'unary+': '__pos__',
         'not': '__invert__',
         'and': '__and__',
@@ -846,7 +970,7 @@ class PyMethod:  # MARK: PyMethod
         raise ValueError(f"Invalid method name or operator: {name}")
 
     @staticmethod
-    def convert_to_lines(method: 'PyMethod') -> list[str]:
+    def convert_to_lines(method: 'PyMethod', wrap_with_single_quote: bool = True) -> list[str]:
         lines: list[str] = []
         
         # @staticmethod
@@ -857,6 +981,10 @@ class PyMethod:  # MARK: PyMethod
         if method.is_overload:
             lines.append('@overload')
         
+        # @abstractmethod
+        if method.is_required:
+            lines.append('@abstractmethod')
+        
         # def xxx(xxx: xxx, xxx: xxx, *args, xxx: xxx = xxx) -> xxx:
         args_expr: list[str] = []
         if not method.is_static:
@@ -866,9 +994,9 @@ class PyMethod:  # MARK: PyMethod
             if i == method.vararg_position:
                 args_expr.append('*args')
             else:
-                args_expr.append(PyArgument.convert_to_string(arg))
+                args_expr.append(PyArgument.convert_to_string(arg, wrap_with_single_quote=wrap_with_single_quote))
 
-        return_type_expr = PyTypeExpr.convert_to_string(method.return_type_expr) if method.return_type_expr else "None"
+        return_type_expr = PyTypeExpr.convert_to_string(method.return_type_expr, wrap_with_single_quote=wrap_with_single_quote) if method.return_type_expr else "None"
         
         keyword_underline = ""
         if iskeyword(method.name):
@@ -932,11 +1060,11 @@ class PyMember:  # MARK: PyMember
     inline_comment: str|None = field(default=None)
     
     @staticmethod
-    def convert_to_string(member: 'PyMember', type_annotation_mode: Literal['explicit', 'comment', 'none'] = 'explicit') -> str:
+    def convert_to_string(member: 'PyMember', type_annotation_mode: Literal['explicit', 'comment', 'none'] = 'explicit', wrap_with_single_quote: bool = True) -> str:
         keyword_underline = ""
         if iskeyword(member.name):
             keyword_underline = "_"
-        s = f'{member.name}{keyword_underline}{": "+PyTypeExpr.convert_to_string(member.type_expr) if type_annotation_mode == "explicit" else ""}'
+        s = f'{member.name}{keyword_underline}{": "+PyTypeExpr.convert_to_string(member.type_expr, wrap_with_single_quote=wrap_with_single_quote) if type_annotation_mode == "explicit" else ""}'
         if member.value_expr:
             s += f' = {PyValueExpr.convert_to_string(member.value_expr)}'
 
@@ -945,7 +1073,7 @@ class PyMember:  # MARK: PyMember
             
             # 只有comment模式才会添加类型注解到注释中
             if type_annotation_mode == "comment":
-                comment_parts.append(f"type: {PyTypeExpr.convert_to_string(member.type_expr)}")
+                comment_parts.append(f"type: {PyTypeExpr.convert_to_string(member.type_expr, wrap_with_single_quote=wrap_with_single_quote)}")
             
             # 无论何种模式下, 若存在inline_comment, 那么都显示内联注释
             if member.inline_comment:
@@ -995,6 +1123,7 @@ class PyClass:  # MARK: PyClass
     
     CLASS_NAME_ALIAS: ClassVar[dict[str, str]] = {"str":"String", "int": "Int", "float": "Float", "bool": "Bool"}
     CLASS_IGNORED: ClassVar[set[str]] = {"None"}
+    METHOD_IGNORED: ClassVar[set[str]] = {"__ne__", "__eq__"}
     
     ALL_CLASSES: ClassVar[dict['PyType', list['PyClass']]] = {}
     
@@ -1039,7 +1168,7 @@ class PyClass:  # MARK: PyClass
         return used_types
     
     @staticmethod
-    def convert_to_lines(pyclass: 'PyClass') -> list[str]:
+    def convert_to_lines(pyclass: 'PyClass', wrap_with_single_quote: bool = True) -> list[str]:
         lines: list[str] = []
         
         # 忽略某些类
@@ -1054,15 +1183,14 @@ class PyClass:  # MARK: PyClass
             class_name = PyClass.CLASS_NAME_ALIAS[class_name]
             
         # class xxx(xxx):
-        
         GENERIC_TYPES = {
-                "Signal": "[T: Callable]",
+                "Signal": "[T: typing.Callable]",
                 "Callable": "[T, R]",
                 "Array": "[T]",
             }
         generic_annotation = GENERIC_TYPES.get(class_name, "")
         
-        inherit_annotation = "" if not pyclass.type.inherit else f'({PyType.convert_to_string(pyclass.type.inherit, wrap_with_single_quote=False)})'
+        inherit_annotation = "" if not pyclass.type.inherit else f'({PyType.convert_to_string(pyclass.type.inherit, wrap_with_single_quote=wrap_with_single_quote)})'
         
         class_definition_line = f'class {class_name}{generic_annotation}{inherit_annotation}:'
         
@@ -1101,28 +1229,32 @@ class PyClass:  # MARK: PyClass
         
         # class attributes
         if pyclass.type.category != PyTypeCategory.ENUM:
+            # 正常类型
             for member in pyclass.class_attributes:
                 type_annotation_mode = 'comment'
-                lines.append("    " + PyMember.convert_to_string(member, type_annotation_mode = type_annotation_mode))
+                lines.append("    " + PyMember.convert_to_string(member, type_annotation_mode = type_annotation_mode, wrap_with_single_quote=wrap_with_single_quote))
         else:
-            enum_const_type_list: list[PyTypeExpr] = []
+            # Enum类型
+            enum_members: list[PyMember] = []
             for member in pyclass.class_attributes:
                 if not member.value_expr:
                     raise ValueError(f"Enum member '{member.name}' has no value_expr")
                 if member.value_expr.category != PyValueExprCategory.INT:
                     raise ValueError(f"Enum member '{member.name}'='{member.value_expr}' is not INT")
-                enum_const_type_list.append(member.type_expr)
+                enum_members.append(member)
             
-            for enum_const_type in enum_const_type_list:
-                lines.append("    " + PyTypeExpr.convert_to_string(enum_const_type, wrap_with_single_quote=False))
+            for member in enum_members:
+                lines.append("    " + PyMember.convert_to_string(member, type_annotation_mode = 'none', wrap_with_single_quote=wrap_with_single_quote))  # 枚举类型不允许类型注解, 同时已经确保所有枚举为int, 因此不需要任何形式的类型说明
             
         # instance members
         for member in pyclass.members:
-            lines.append("    " + PyMember.convert_to_string(member))
+            lines.append("    " + PyMember.convert_to_string(member, wrap_with_single_quote=wrap_with_single_quote))
         
-        # class methods
+        # methods
         for method in pyclass.methods:
-            lines.extend([f'    {line}' for line in PyMethod.convert_to_lines(method)])
+            if method.name in PyClass.METHOD_IGNORED:
+                continue
+            lines.extend([f'    {line}' for line in PyMethod.convert_to_lines(method, wrap_with_single_quote=wrap_with_single_quote)])
 
         return lines
     
@@ -1166,8 +1298,12 @@ class PyFile:  # MARK: PyFile
     global_functions: list[PyMethod] = field(default_factory=list)
     classes: list[PyClass] = field(default_factory=list)
     
+    IGNORED_GLOBAL_VARIABLES = [
+        "Script"
+    ]
+    
     @staticmethod
-    def convert_to_lines(pyfile: 'PyFile') -> list[str]:
+    def convert_to_lines(pyfile: 'PyFile', wrap_with_single_quote: bool = True) -> list[str]:
         lines: list[str] = []
         
         # from xxx import xxx
@@ -1185,43 +1321,26 @@ class PyFile:  # MARK: PyFile
             lines.append('')
         
         # global variables
-        for variable in pyfile.global_variables:
-            lines.append(PyMember.convert_to_string(variable) if isinstance(variable, PyMember) else SpecifiedPyMember.convert_to_string(variable))
+        for variable in pyfile.global_variables: 
+            if isinstance(variable, SpecifiedPyMember):
+                if SpecifiedPyMember.convert_to_string(variable).split('=')[0].strip() in PyFile.IGNORED_GLOBAL_VARIABLES: 
+                    continue
+                 
+            
+            
+            lines.append(PyMember.convert_to_string(variable, wrap_with_single_quote=wrap_with_single_quote) if isinstance(variable, PyMember) else SpecifiedPyMember.convert_to_string(variable))
             lines.append('')
         
         # global functions
         for function in pyfile.global_functions:
-            lines.extend(PyMethod.convert_to_lines(function))
+            lines.extend(PyMethod.convert_to_lines(function, wrap_with_single_quote=wrap_with_single_quote))
             lines.append('')
         
-        # classes
-        # 根据继承的先后关系, 先添加父类, 再添加子类
-        
+        # classes        
         # 提取所有类的类型
-        class_map = {pyclass.type.name: pyclass for pyclass in pyfile.classes}
-        
-        # 同时考虑继承关系和类型使用关系
-        
-        # 构建类型使用依赖图
-        usage_graph = PyClass.build_dependency_graph(pyfile.classes)
-        
-        
-        # 对依赖图进行拓扑排序
-        ordered_class_names = topological_sort(usage_graph)
-        ordered_class_names.reverse()
-        
-        # 按照排序后的顺序添加类
-        for class_name in ordered_class_names:
-            if class_name in class_map:
-                pyclass = class_map[class_name]
-                lines.extend(PyClass.convert_to_lines(pyclass))
-                lines.append('')
-                lines.append('')
-        
-        # 添加没有在排序结果中的剩余类（可能是没有依赖关系的类）
-        remaining_classes = [pyclass for pyclass in pyfile.classes if pyclass.type.name not in ordered_class_names]
-        for pyclass in remaining_classes:
-            lines.extend(PyClass.convert_to_lines(pyclass))
+        for pyclass in pyfile.classes:
+            lines.extend(PyClass.convert_to_lines(pyclass, wrap_with_single_quote=wrap_with_single_quote))
+            lines.append('')
             lines.append('')
         
         return lines
