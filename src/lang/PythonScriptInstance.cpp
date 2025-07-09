@@ -117,17 +117,32 @@ void notification_func(PythonScriptInstance *p_instance, int32_t p_what, GDExten
 }
 
 void to_string_func(PythonScriptInstance *p_instance, GDExtensionBool *r_is_valid, String *r_out) {
-	py_StackRef p0 = py_peek(0);
-	bool ok = py_repr(&p_instance->py);
-	if (ok) {
-		*r_is_valid = true;
-		c11_sv sv = py_tosv(py_retval());
-		*r_out = String::utf8(sv.data, sv.size);
-	} else {
+	Object *owner = p_instance->owner;
+	if (!owner) {
 		*r_is_valid = false;
 		*r_out = String();
-		log_python_error_and_clearexc(p0);
+		return;
 	}
+	py_Type type = py_typeof(&p_instance->py);
+	const char *type_name = py_tpname(type);
+	String owner_class = p_instance->owner->get_class();
+	char buf[64];
+	snprintf(buf, sizeof(buf), "%s at %p>", type_name, p_instance->owner);
+	*r_out = String("<godot.") + owner_class + "@" + String::utf8(buf);
+
+	*r_is_valid = true;
+
+	// py_StackRef p0 = py_peek(0);
+	// bool ok = py_repr(&p_instance->py);
+	// if (ok) {
+	// 	*r_is_valid = true;
+	// 	c11_sv sv = py_tosv(py_retval());
+	// 	*r_out = String::utf8(sv.data, sv.size);
+	// } else {
+	// 	*r_is_valid = false;
+	// 	*r_out = String();
+	// 	log_python_error_and_clearexc(p0);
+	// }
 }
 
 void refcount_incremented_func(PythonScriptInstance *) {

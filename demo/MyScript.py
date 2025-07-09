@@ -8,13 +8,15 @@ class MyScript(Extends(Node)):
 
 	def __init__(self):
 		print("__init__()")
-		print(Projection.Planes, Projection.Planes.PLANE_NEAR)
+		print(TileSet.TILE_LAYOUT_STACKED_OFFSET)
 		#print("==>", self.x, self.y, self.z, self.w)
 
 	def _ready(self):
 		print('_ready()')
+		print('==>', self.owner, self.owner.script)
 		print('==>', self.x, self.y, self.z, self.w)
 		print('==> path:', self.owner.get_path())
 
 	def _process(self, delta: float) -> None:
+		return
 		print('==>', f'_process({delta:.4f})')

@@ -1,6 +1,5 @@
 #include "Bindings.hpp"
 #include "PythonScriptInstance.hpp"
-#include "PythonScriptLanguage.hpp"
 
 #include <godot_cpp/classes/engine.hpp>
 #include <godot_cpp/classes/node.hpp>
@@ -13,6 +12,20 @@ void setup_bindings_generated();
 
 static bool Variant_getattribute(py_Ref self, py_Name name) {
 	Variant *v = (Variant *)py_touserdata(self);
+	if (v->get_type() == Variant::OBJECT) {
+		Object *obj = v->operator Object *();
+		bool derived_from_Node = obj->is_class("Node");
+		if (derived_from_Node && name == py_name("script")) {
+			PythonScriptInstance *inst = PythonScriptInstance::attached_to_object(obj);
+			if (inst != nullptr) {
+				py_assign(py_retval(), &inst->py);
+			} else {
+				py_newnone(py_retval());
+			}
+			return true;
+		}
+	}
+
 	bool r_valid;
 	Variant res = v->get_named(python_name_to_godot(name), r_valid);
 	if (!r_valid) {
@@ -32,8 +45,17 @@ static bool Variant_setattribute(py_Ref self, py_Name name, py_Ref value) {
 	return true;
 }
 
-static bool Variant_delattribute(py_Ref self, py_Name name) {
-	return TypeError("cannot delete attribute");
+static bool GDNativeClass_getattribute(py_Ref self, py_Name name) {
+	StringName clazz = python_name_to_godot((py_Name)py_totrivial(self));
+	StringName sn = python_name_to_godot(name);
+	bool has_int_const = ClassDB::class_has_integer_constant(clazz, sn);
+	if (has_int_const) {
+		int64_t int_value = ClassDB::class_get_integer_constant(clazz, sn);
+		py_newint(py_retval(), int_value);
+		return true;
+	}
+	return py_exception(tp_AttributeError, "GDNativeClass '%n' has no attribute '%n'",
+			godot_name_to_python(clazz), name);
 }
 
 static void setup_exports() {
@@ -132,6 +154,21 @@ void setup_python_bindings() {
 	// GDNativeClass
 	pyctx()->tp_NativeClass = py_newtype("GDNativeClass", tp_object, godot, NULL);
 
+	py_tphookattributes(pyctx()->tp_NativeClass, GDNativeClass_getattribute, NULL, NULL);
+
+	py_bindmethod(pyctx()->tp_NativeClass, "__call__", [](int argc, py_Ref argv) -> bool {
+		PY_CHECK_ARGC(1);
+		PY_CHECK_ARG_TYPE(0, pyctx()->tp_NativeClass);
+		StringName clazz = python_name_to_godot((py_Name)py_totrivial(argv));
+		Object *obj = ClassDB::instantiate(clazz);
+		if (!obj) {
+			return RuntimeError("failed to instantiate class '%n'", godot_name_to_python(clazz));
+		}
+		Variant res(obj);
+		py_newvariant(py_retval(), &res);
+		return true;
+	});
+
 	// Extends
 	py_bindfunc(godot, "Extends", [](int argc, py_Ref argv) -> bool {
 		auto ctx = &pyctx()->reloading_context;
@@ -151,7 +188,7 @@ void setup_python_bindings() {
 		v->~Variant();
 	});
 
-	py_tphookattributes(type, Variant_getattribute, Variant_setattribute, Variant_delattribute);
+	py_tphookattributes(type, Variant_getattribute, Variant_setattribute, NULL);
 
 	py_bindmethod(type, "__call__", [](int argc, py_Ref argv) -> bool {
 		Variant *self = (Variant *)py_touserdata(&argv[0]);
