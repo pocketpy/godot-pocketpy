@@ -10,6 +10,10 @@ class_name NewScript
 func _ready() -> void:
 	var c = test
 	print(c.call(1, 2))
+	print(TileSet.CELL_NEIGHBOR_BOTTOM_CORNER)
+	var t = TileSet.new()
+	print(t.CELL_NEIGHBOR_BOTTOM_CORNER)
+	print(TYPE_BOOL)
 
 func test(a: int, b: float):
 	return a + b

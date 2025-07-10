@@ -1,5 +1,7 @@
 from .schema_gdt import *
 from .schema_py import *
+
+from .enum import gen_global_enums, gen_class_enum, gen_builtin_class_enum
 from .writer import Writer
 
 
@@ -271,8 +273,9 @@ def _map_class_properties(
 @dataclass
 class MapResult:
     typings_pyi: PyFile
-    enum_pyi: PyFile
-    init_pyi: PyFile
+    enums_pyi: Writer
+    class_enums_pyi: Writer
+    init_pyi: Writer
     c_writer: Writer
 
 
@@ -284,35 +287,30 @@ def map_gdt_to_py(gdt_all_in_one: GodotInOne) -> MapResult:
             name="typings.pyi",
             imports=[
                 """import typing""",
-                """from typing import overload, abstractmethod""",
-                "from .enum import *",
+                """from typing import overload""",
+                "from ._class_enums import *",
+                "from .enums import *",
                 "",
                 "",
                 "def default(gdt_expr: str) -> typing.Any: ...",
             ],
             classes=[],
         ),
-        enum_pyi=PyFile(
-            name="enum.pyi",
-            imports=["""from enum import Enum"""],
-            classes=[],
-        ),
-        init_pyi=PyFile(
-            name="__init__.pyi",
-            imports=[
-                "from . import typings as _typings",
-                "",
-                "",
-                "class GDNativeClass[T: _typings.Variant]:",
-                "    def __init__(self, name: str): ...",
-                "",
-                "class Script[T: _typings.Object]:",
-                "    @property",
-                "    def owner(self) -> T: ...",
-                "",
-                "def Extends[T: _typings.Object](cls: GDNativeClass[T]) -> type[Script[T]]: ...",
-            ],
-            global_variables=[],
+        enums_pyi=Writer().write('from typing import Literal\n\n'),
+        class_enums_pyi=Writer().write('from typing import Literal\n\n'),
+        init_pyi=Writer().write(
+'''from . import typings as _typings
+
+
+class GDNativeClass[T: _typings.Variant]:
+    def __init__(self, name: str): ...
+
+class PythonScriptInstance[T: _typings.Object]:
+    @property
+    def owner(self) -> T: ...
+
+def Extends[T: _typings.Object](cls: GDNativeClass[T]) -> type[PythonScriptInstance[T]]: ...
+'''
         ),
         c_writer=Writer(),
     )
@@ -340,17 +338,9 @@ def map_gdt_to_py(gdt_all_in_one: GodotInOne) -> MapResult:
     # ===============================
     class_single_classes: list[PyClass] = []
     for cls_data in gdt_all_in_one.classes:
-        descriptions: list[str] = []
-        if cls_data.brief_description:
-            descriptions.append(cls_data.brief_description)
-        if cls_data.description:
-            descriptions.append(cls_data.description)
-        if descriptions:
-            description = '"""' + "\n".join(descriptions) + "\n" + '"""'
-            descriptions = description.splitlines()
         pyclass = PyClass(
             type=PyType.get(cls_data.name),
-            description_lines=descriptions,
+            description_lines=[],
             members=[],
             class_attributes=[],
             methods=[],
@@ -367,17 +357,9 @@ def map_gdt_to_py(gdt_all_in_one: GodotInOne) -> MapResult:
     # ===============================
     builtin_classes: list[PyClass] = []
     for cls_data in gdt_all_in_one.builtin_classes:
-        descriptions: list[str] = []
-        if cls_data.brief_description:
-            descriptions.append(cls_data.brief_description)
-        if cls_data.description:
-            descriptions.append(cls_data.description)
-        if descriptions:
-            description = '"""' + "\n".join(descriptions) + "\n" + '"""'
-            descriptions = description.splitlines()
         pyclass = PyClass(
             type=PyType.get(cls_data.name),
-            description_lines=descriptions,
+            description_lines=[],
             members=[],
             class_attributes=[],
             methods=[],
@@ -392,91 +374,52 @@ def map_gdt_to_py(gdt_all_in_one: GodotInOne) -> MapResult:
     # MARK: enum
     # ===============================
     # --- global enum ---
-    enum_classes = []
+    gen_global_enums(map_result.enums_pyi, gdt_all_in_one.global_enums)
     for enum_data in gdt_all_in_one.global_enums:
-        descriptions: list[str] = []
-        if enum_data.description:
-            descriptions.append(enum_data.description)
-        if descriptions:
-            description = '"""' + "\n" + "\n".join(descriptions) + "\n" + '"""'
-            descriptions = description.splitlines()
-
         pyclass = PyClass(
             type=PyType.get(enum_data.name),
-            description_lines=descriptions,
+            description_lines=[],
             members=[],
             class_attributes=[],
             methods=[],
         )
-
         _map_enum(enum_data, pyclass)
-        enum_classes.append(pyclass)
-
-    map_result.enum_pyi.classes.extend(enum_classes)
 
     # --- classes enum ---
-    folded_enums = [
-        (cls_data.name, cls_data.enums) for cls_data in gdt_all_in_one.classes
-    ]
-    flattened_enums = [
-        (cls_name, enum_data)
-        for cls_name, enums in folded_enums
-        for enum_data in enums or []
-    ]
+    enums_w = map_result.class_enums_pyi
 
-    enum_classes: list[PyClass] = []
-    for cls_name, enum_data in flattened_enums:
-        descriptions: list[str] = []
-        if enum_data.description:
-            descriptions.append(enum_data.description)
-        if descriptions:
-            description = '"""' + "\n" + "\n".join(descriptions) + "\n" + '"""'
-            descriptions = description.splitlines()
+    for cls_data in gdt_all_in_one.classes + gdt_all_in_one.builtin_classes:
+        if not cls_data.enums:
+            continue
+        cls_name = cls_data.name
+        enum_cls_name = f"{cls_name}Enum"
+        PyType._CLASS_TO_CLASS_ENUM[cls_name] = enum_cls_name
+        enums_w.write(f'class {enum_cls_name}:')
+        enums_w.indent()
 
-        pyclass = PyClass(
-            type=PyType.get(cls_name + "__" + enum_data.name),
-            description_lines=descriptions,
-            members=[],
-            class_attributes=[],
-            methods=[],
-        )
+        aliases = []
+        for enum_data in cls_data.enums:
+            alias_name = cls_name + "_" + enum_data.name
+            PyType._CLASS_ENUM_TO_CLASS[alias_name] = cls_name
+            aliases.append((alias_name, enum_data.name))
+            pyclass = PyClass(
+                type=PyType.get(alias_name),
+                description_lines=[],
+                members=[],
+                class_attributes=[],
+                methods=[],
+            )
+            # 处理各种属性
+            _map_enum(enum_data, pyclass)
 
-        # 处理各种属性
-        _map_enum(enum_data, pyclass)
-        enum_classes.append(pyclass)
-
-    map_result.enum_pyi.classes.extend(enum_classes)
-
-    # --- builtin class enum ---
-    folded_enums = [
-        (cls_data.name, cls_data.enums) for cls_data in gdt_all_in_one.builtin_classes
-    ]
-    flattened_enums = [
-        (cls_name, enum_data)
-        for cls_name, enums in folded_enums
-        for enum_data in enums or []
-    ]
-    enum_classes = []
-    for cls_name, enum_data in flattened_enums:
-        descriptions: list[str] = []
-        if enum_data.description:
-            descriptions.append(enum_data.description)
-        if descriptions:
-            description = '"""' + "\n" + "\n".join(descriptions) + "\n" + '"""'
-            descriptions = description.splitlines()
-
-        pyclass = PyClass(
-            type=PyType.get(cls_name + "__" + enum_data.name),
-            description_lines=descriptions,
-            members=[],
-            class_attributes=[],
-            methods=[],
-        )
-            
-        _map_enum(enum_data, pyclass)
-        enum_classes.append(pyclass)
-
-    map_result.enum_pyi.classes.extend(enum_classes)
+            if isinstance(enum_data, ClassesEnum):
+                gen_class_enum(enums_w, enum_data)
+            else:
+                gen_builtin_class_enum(enums_w, enum_data)
+        enums_w.dedent()
+        for alias_name, enum_name in aliases:
+            enums_w.write(f"{alias_name} = {enum_cls_name}.{enum_name}")
+        enums_w.write('\n')
 
     # ===============================
     # __init__.pyi
@@ -486,11 +429,7 @@ def map_gdt_to_py(gdt_all_in_one: GodotInOne) -> MapResult:
     #   Engine = GDNativeSingleton[_typings.Engine]('Engine')
     for pytype in PyType.ALL_TYPES.values():
         if pytype.category == PyTypeCategory.SINGLETON_GODOT_NATIVE:
-            map_result.init_pyi.global_variables.append(
-                SpecifiedPyMember(
-                    specified_string=f"{pytype.name}: _typings.{pytype.name}",
-                )
-            )
+            map_result.init_pyi.write(f"{pytype.name}: _typings.{pytype.name}")
 
             cpp_name = pytype.name
             if cpp_name == "ClassDB":
@@ -502,11 +441,7 @@ def map_gdt_to_py(gdt_all_in_one: GodotInOne) -> MapResult:
     c_writer.write("")
     for pytype in PyType.ALL_TYPES.values():
         if pytype.category == PyTypeCategory.GODOT_NATIVE:
-            map_result.init_pyi.global_variables.append(
-                SpecifiedPyMember(
-                    specified_string=f"{pytype.name}: GDNativeClass[_typings.{pytype.name}]",
-                )
-            )
+            map_result.init_pyi.write(f"{pytype.name}: GDNativeClass[_typings.{pytype.name}]")
             c_writer.write(f'register_GDNativeClass("{pytype.name}");')
 
 

@@ -79,6 +79,10 @@ class PyType:  # MARK: PyType
     
     # 父类查找缓存
     _SUPERCLASSES_CACHE: ClassVar[dict[str, set['PyType']]] = {}
+
+    # 枚举基类
+    _CLASS_ENUM_TO_CLASS: ClassVar[dict[str, str]] = {}
+    _CLASS_TO_CLASS_ENUM: ClassVar[dict[str, str]] = {}
     
     inherit: 'PyType | None' = field(default=None)
     
@@ -120,9 +124,9 @@ class PyType:  # MARK: PyType
                         grouped_types[first_letter] = []
                     grouped_types[first_letter].append(type_name)
                 
-                error_msg = f"Type not found: {name}\n\tALL_TYPES:\n"
-                for letter in sorted(grouped_types.keys()):
-                    error_msg += f"\t{letter}: {', '.join(grouped_types[letter])}\n"
+                error_msg = f"Type not found: {name}"
+                # for letter in sorted(grouped_types.keys()):
+                #     error_msg += f"\t{letter}: {', '.join(grouped_types[letter])}\n"
                 
                 raise ValueError(error_msg.rstrip())
             return None
@@ -246,7 +250,7 @@ class PyType:  # MARK: PyType
             
             if cls_data.enums:
                 for enum_data in cls_data.enums:
-                    name = cls_data.name + '__' + enum_data.name
+                    name = cls_data.name + '_' + enum_data.name
                     cls.add(name, PyTypeCategory.ENUM)
                     cls.get(name).inherit = cls.get("Enum")
                     
@@ -256,7 +260,7 @@ class PyType:  # MARK: PyType
         for builtin_cls_data in gdt_all_in_one.builtin_classes:
             if builtin_cls_data.enums:
                 for enum_data in builtin_cls_data.enums:
-                    name = builtin_cls_data.name + '__' + enum_data.name
+                    name = builtin_cls_data.name + '_' + enum_data.name
                     cls.add(name, PyTypeCategory.ENUM)
                     cls.get(name).inherit = cls.get("Enum")
 
@@ -317,15 +321,15 @@ class PyType:  # MARK: PyType
         
         # 枚举类型
         if name.startswith('enum::'):
-            return name.replace('enum::', '').replace('.', "__")
+            return name.replace('enum::', '').replace('.', "_")
         
         # 也是枚举类型, 包含"."但是不包含"::"的类型
         if '.' in name and '::' not in name:
-            return name.replace('.', "__")
+            return name.replace('.', "_")
         
         # 位域类型
         if name.startswith('bitfield::'):
-            return name.replace('bitfield::', '').replace('.', "__")
+            return name.replace('bitfield::', '').replace('.', "_")
         
         # typedarray
         if name.startswith('typedarray::') or name == 'typedarray':
@@ -773,7 +777,6 @@ class PyValueExpr:  # MARK: PyValueExpr
         if pyvalue.category == PyValueExprCategory.NULL:
             return 'None'
         elif pyvalue.category == PyValueExprCategory.ENUM_CONST:
-            
             enum_classes: list[PyClass] = []
             
             enum_type: PyType | None = None
@@ -805,7 +808,12 @@ class PyValueExpr:  # MARK: PyValueExpr
                     print(e)
                     return "IGNORED_ENUM_VALUE"
                 
-            return enum_class.type.name + '.' + members[0].name  # 返回枚举的名称(也即枚举体的PyMember的name)
+            # 返回枚举的名称(也即枚举体的PyMember的name)
+            clazz = PyType._CLASS_ENUM_TO_CLASS.get(enum_class.type.name)
+            if clazz:
+                return clazz + '.' + members[0].name
+            else:
+                return members[0].name
         
         elif pyvalue.category == PyValueExprCategory.INT:
             return pyvalue.value_expr
@@ -824,12 +832,12 @@ class PyValueExpr:  # MARK: PyValueExpr
                 raise ValueError(f"value expression --->{pyvalue.value_expr}<--- is not a valid bool")
             
         elif pyvalue.category == PyValueExprCategory.OTHER_TYPE:
-            if DEBUG:
-                print(f"Warning: value expression: --->{pyvalue.value_expr}<--- type: '{PyTypeExpr.convert_to_string(pyvalue.type_expr, wrap_with_single_quote=wrap_with_single_quote) if pyvalue.type_expr else 'None'}' category: {pyvalue.category} has not matched any type")
+            # if DEBUG:
+            #     print(f"Warning: value expression: --->{pyvalue.value_expr}<--- type: '{PyTypeExpr.convert_to_string(pyvalue.type_expr, wrap_with_single_quote=wrap_with_single_quote) if pyvalue.type_expr else 'None'}' category: {pyvalue.category} has not matched any type")
             return "default(" + repr(pyvalue.value_expr) + ")"
         elif pyvalue.category == PyValueExprCategory.UNKNOWN:
-            if DEBUG:
-                print(f"Warning: value expression: --->{pyvalue.value_expr}<--- type: '{PyTypeExpr.convert_to_string(pyvalue.type_expr, wrap_with_single_quote=wrap_with_single_quote) if pyvalue.type_expr else 'None'}' category: {pyvalue.category} has not matched any type")
+            # if DEBUG:
+            #     print(f"Warning: value expression: --->{pyvalue.value_expr}<--- type: '{PyTypeExpr.convert_to_string(pyvalue.type_expr, wrap_with_single_quote=wrap_with_single_quote) if pyvalue.type_expr else 'None'}' category: {pyvalue.category} has not matched any type")
             return "default(" + repr(pyvalue.value_expr) + ")"
         else:
             raise ValueError(f"Unknown category: {pyvalue.category}")
@@ -1190,8 +1198,16 @@ class PyClass:  # MARK: PyClass
             }
         generic_annotation = GENERIC_TYPES.get(class_name, "")
         
-        inherit_annotation = "" if not pyclass.type.inherit else f'({PyType.convert_to_string(pyclass.type.inherit, wrap_with_single_quote=wrap_with_single_quote)})'
-        
+        inherits = []
+        if pyclass.type.inherit:
+            inherits.append(PyType.convert_to_string(pyclass.type.inherit, wrap_with_single_quote=wrap_with_single_quote))
+        enum_base = PyType._CLASS_TO_CLASS_ENUM.get(class_name)
+        if enum_base:
+            inherits.append(enum_base)
+        inherit_annotation = ""
+        if inherits:
+            inherit_annotation = f'({", ".join(inherits)})'
+
         class_definition_line = f'class {class_name}{generic_annotation}{inherit_annotation}:'
         
         lines.append(class_definition_line)
@@ -1318,12 +1334,6 @@ class PyFile:  # MARK: PyFile
         
         # global variables
         for variable in pyfile.global_variables: 
-            if isinstance(variable, SpecifiedPyMember):
-                if SpecifiedPyMember.convert_to_string(variable).startswith('Script:'): 
-                    continue
-                 
-            
-            
             lines.append(PyMember.convert_to_string(variable, wrap_with_single_quote=wrap_with_single_quote) if isinstance(variable, PyMember) else SpecifiedPyMember.convert_to_string(variable))
             # lines.append('')
         
