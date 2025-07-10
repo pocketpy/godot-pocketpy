@@ -1,5 +1,7 @@
 from godot import *
 
+import test
+
 class MyScript(Extends(Node)):
 	x = export(int, default=10)
 	y = export(Node)
@@ -7,8 +9,9 @@ class MyScript(Extends(Node)):
 	w = export(str, default='ab')
 
 	def __init__(self):
-		print("__init__()")
+		print('__init__()')
 		print(TileSet.TILE_LAYOUT_STACKED_OFFSET)
+		print('==>', test.add('hello', ' world'))
 		#print("==>", self.x, self.y, self.z, self.w)
 
 	def _ready(self):

@@ -2,6 +2,7 @@
 #include "PythonScriptInstance.hpp"
 
 #include <godot_cpp/classes/engine.hpp>
+#include <godot_cpp/classes/file_access.hpp>
 #include <godot_cpp/classes/node.hpp>
 #include <godot_cpp/core/defs.hpp>
 #include <godot_cpp/variant/callable.hpp>
@@ -132,6 +133,25 @@ void setup_python_bindings() {
 	};
 	py_callbacks()->flush = []() {
 		// No-op, Godot's print is already flushed.
+	};
+	py_callbacks()->importfile = [](const char *path_cstr) -> char * {
+		String path = String::utf8(path_cstr);
+		path = "res://site-packages/" + path;
+		bool exists = FileAccess::file_exists(path);
+		if (!exists) {
+			return nullptr;
+		}
+		Ref<FileAccess> file = FileAccess::open(path, FileAccess::ModeFlags::READ);
+		if (!file->is_open()) {
+			String msg = "cannot open file '" + path + "' when importing '" + path_cstr + "' module";
+			ERR_PRINT(msg);
+			return nullptr;
+		}
+		CharString content = file->get_as_text().utf8();
+		char *dup = (char *)PK_MALLOC(content.length() + 1);
+		memcpy(dup, content.get_data(), content.length());
+		dup[content.length()] = '\0';
+		return dup;
 	};
 
 	py_GlobalRef godot = pyctx()->godot = py_newmodule("godot");
