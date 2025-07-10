@@ -61,7 +61,9 @@ class PyType:  # MARK: PyType
     name: str
         
     COMPATIBLE_TYPES_MAP: ClassVar[dict[str, str]] = {"Nil":'None', "int":'int', "float":'float', "bool":'bool', "String":'str'}    
-    
+    NO_OBJECT_VARIANT_TYPES: ClassVar[set[str]] = set()
+
+
     ALL_TYPES: ClassVar[dict[str, 'PyType']] = {}
     
     

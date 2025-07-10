@@ -301,13 +301,15 @@ def map_gdt_to_py(gdt_all_in_one: GodotInOne) -> MapResult:
         init_pyi=Writer().write(
 '''from . import typings as _typings
 
-
-class GDNativeClass[T: _typings.Variant]:
-    def __init__(self, name: str): ...
-
 class PythonScriptInstance[T: _typings.Object]:
     @property
     def owner(self) -> T: ...
+
+class GDNativeClass[T: _typings.Object]:
+    @property
+    def script(self) -> PythonScriptInstance[T]: ...
+
+class GDBuiltinClass[T: _typings.Variant]: ...
 
 def Extends[T: _typings.Object](cls: GDNativeClass[T]) -> type[PythonScriptInstance[T]]: ...
 '''
@@ -441,7 +443,10 @@ def Extends[T: _typings.Object](cls: GDNativeClass[T]) -> type[PythonScriptInsta
     c_writer.write("")
     for pytype in PyType.ALL_TYPES.values():
         if pytype.category == PyTypeCategory.GODOT_NATIVE:
-            map_result.init_pyi.write(f"{pytype.name}: GDNativeClass[_typings.{pytype.name}]")
+            if pytype.name in PyType.NO_OBJECT_VARIANT_TYPES:
+                map_result.init_pyi.write(f"{pytype.name}: GDBuiltinClass[_typings.{pytype.name}]")
+            else:
+                map_result.init_pyi.write(f"{pytype.name}: GDNativeClass[_typings.{pytype.name}]")
             c_writer.write(f'register_GDNativeClass("{pytype.name}");')
 
 
