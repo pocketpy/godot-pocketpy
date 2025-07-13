@@ -46,8 +46,13 @@ static bool Variant_setattribute(py_Ref self, py_Name name, py_Ref value) {
 	return true;
 }
 
+static StringName to_GDNativeClass(py_Ref self) {
+	py_Name *p = (py_Name *)py_totrivial(self);
+	return python_name_to_godot(*p);
+}
+
 static bool GDNativeClass_getattribute(py_Ref self, py_Name name) {
-	StringName clazz = python_name_to_godot((py_Name)py_totrivial(self));
+	StringName clazz = to_GDNativeClass(self);
 	StringName sn = python_name_to_godot(name);
 	bool has_int_const = ClassDB::class_has_integer_constant(clazz, sn);
 	if (has_int_const) {
@@ -90,7 +95,7 @@ static void setup_exports() {
 			}
 		} else if (py_istype(&argv[0], pyctx()->tp_NativeClass)) {
 			PY_CHECK_ARG_TYPE(0, pyctx()->tp_NativeClass);
-			type_name = python_name_to_godot((py_Name)py_totrivial(&argv[0]));
+			type_name = to_GDNativeClass(&argv[0]);
 		} else {
 			return TypeError("expected 'type' or 'GDNativeClass', got '%t'", py_typeof(&argv[0]));
 		}
@@ -179,7 +184,7 @@ void setup_python_bindings() {
 	py_bindmethod(pyctx()->tp_NativeClass, "__call__", [](int argc, py_Ref argv) -> bool {
 		PY_CHECK_ARGC(1);
 		PY_CHECK_ARG_TYPE(0, pyctx()->tp_NativeClass);
-		StringName clazz = python_name_to_godot((py_Name)py_totrivial(argv));
+		StringName clazz = to_GDNativeClass(argv);
 		Object *obj = ClassDB::instantiate(clazz);
 		if (!obj) {
 			return RuntimeError("failed to instantiate class '%n'", godot_name_to_python(clazz));
@@ -194,7 +199,7 @@ void setup_python_bindings() {
 		auto ctx = &pyctx()->reloading_context;
 		PY_CHECK_ARGC(1);
 		PY_CHECK_ARG_TYPE(0, pyctx()->tp_NativeClass);
-		StringName nativeClass = python_name_to_godot((py_Name)py_totrivial(argv));
+		StringName nativeClass = to_GDNativeClass(argv);
 		ctx->extends = nativeClass;
 		py_assign(py_retval(), py_tpobject(pyctx()->tp_Script));
 		return true;
@@ -344,7 +349,7 @@ void setup_python_bindings() {
 void register_GDNativeClass(const char *name) {
 	py_TValue tmp;
 	py_Name sn = py_name(name);
-	py_newtrivial(&tmp, pyctx()->tp_NativeClass, (py_i64)sn);
+	py_newtrivial(&tmp, pyctx()->tp_NativeClass, &sn, sizeof(void *));
 	py_setdict(pyctx()->godot, sn, &tmp);
 }
 
@@ -352,6 +357,12 @@ void register_GDNativeSingleton(const char *name, Object *obj) {
 	Variant v(obj);
 	py_OutRef out = py_emplacedict(pyctx()->godot, py_name(name));
 	py_newvariant(out, &v);
+}
+
+void register_GlobalConstant(const char *name, py_i64 value) {
+	py_TValue tmp;
+	py_newint(&tmp, value);
+	py_setdict(pyctx()->godot, py_name(name), &tmp);
 }
 
 } //namespace pkpy
