@@ -155,7 +155,11 @@ class UtilityFunctions:
 @dataclass
 class BuiltinClassOperator:
     name: str
-    right_type: str
+    right_type: str | None  # 勘误, 应该是str|None    
+    #bool is_unary = k == Variant::OP_NEGATE || k == Variant::OP_POSITIVE || k == Variant::OP_NOT || k == Variant::OP_BIT_NEGATE;
+    # if (!is_unary) {
+    # 	d2["right_type"] = right_type_name;
+    # }
     return_type: str   # 勘误,应该是str    d2["return_type"] = get_builtin_or_variant_type_name(Variant::get_operator_return_type(Variant::Operator(k), type, Variant::Type(j)));
     description: str | None
 # https://github.com/godotengine/godot/blob/1b37dacc1842779fb0d03a5b09026f59c13744fc/core/extension/extension_api_dump.cpp#L654
@@ -231,7 +235,7 @@ class BuiltinClassConstructor:
 # a class's basic properties
 #     
 @dataclass
-class BuiltinClass:
+class BuiltinClass:  # MARK: BuiltinClass
     name: str
     indexing_return_type: str | None
     is_keyed: bool
@@ -360,7 +364,7 @@ class ClassesProperty:
 # a single class's property
 #     
 @dataclass
-class ClassesSingle:
+class ClassesSingle:  # MARK: ClassesSingle
     name: str
     is_refcounted: bool
     is_instantiable: bool

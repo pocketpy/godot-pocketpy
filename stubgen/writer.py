@@ -12,6 +12,9 @@ class Writer:
     def write(self, line: str):
         self.buffer.append('    ' * self.indent_level + line)
         return self
+    
+    def writefmt(self, fmt: str, *args):
+        self.write(fmt.format(*args))
 
     def __str__(self) -> str:
         return '\n'.join(self.buffer)

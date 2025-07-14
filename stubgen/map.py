@@ -1,269 +1,11 @@
+from unittest import signals
 from .schema_gdt import *
-from .schema_py import *
 
 from .enum import gen_global_enums, gen_class_enum, gen_builtin_class_enum
 from .writer import Writer
 
-
-# ===============================
-# MARK: 通用映射
-# ===============================
-
-
-def _map_methods(cls_data: ClassesSingle | BuiltinClass, pyclass: PyClass) -> None:
-    """映射方法，包括普通方法和静态方法"""
-
-    # 计算每个方法出现的次数, 用于判断是否需要@overload
-    number_of_occurrences: dict[str, int] = {}
-    for method_data in cls_data.methods or []:
-        if method_data.name in number_of_occurrences:
-            number_of_occurrences[method_data.name] += 1
-        else:
-            number_of_occurrences[method_data.name] = 1
-
-    # 添加方法
-    for method_data in cls_data.methods or []:
-        is_overload = number_of_occurrences[method_data.name] > 1
-        is_required = False
-        descriptions: list[str] = []
-        if method_data.description:
-            descriptions.append(method_data.description)
-        if descriptions:
-            description = '"""' + "\n".join(descriptions) + "\n" + '"""'
-            descriptions = description.splitlines()
-
-        if isinstance(method_data, BuiltinClassMethod):
-            return_type: str | None = method_data.return_type
-            py_return_type_expr = (
-                PyTypeExpr.get_and_cached(return_type) if return_type else None
-            )
-        elif isinstance(method_data, ClassesMethod):
-            return_type: str | None = (
-                method_data.return_value.type if method_data.return_value else None
-            )
-            py_return_type_expr = (
-                PyTypeExpr.get_and_cached(return_type) if return_type else None
-            )
-        elif isinstance(method_data, ClassesMethodVirtual):
-            is_required = False  # 虚方法有默认实现, 不需要显式声明为@abstractmethod
-            return_type: str | None = (
-                method_data.return_value.type if method_data.return_value else None
-            )
-            py_return_type_expr = (
-                PyTypeExpr.get_and_cached(return_type) if return_type else None
-            )
-        else:
-            raise ValueError(
-                f"Invalid class type: {cls_data} when mapping method: {method_data}"
-            )
-
-        pyclass.methods.append(
-            PyMethod(
-                name=method_data.name,
-                description_lines=descriptions,
-                arguments=[],
-                vararg_position=(
-                    None
-                    if not method_data.is_vararg or method_data.arguments is None
-                    else len(method_data.arguments)
-                ),
-                return_type_expr=py_return_type_expr,
-                is_static=method_data.is_static,
-                is_overload=is_overload,
-                is_required=is_required,
-            )
-        )
-
-        _map_method_arguments(method_data, pyclass.methods[-1])
-
-
-def _map_method_arguments(
-    method_data: ClassesMethod | BuiltinClassMethod | ClassesMethodVirtual,
-    pymethod: PyMethod,
-) -> None:
-    """映射方法参数"""
-    for argument_data in method_data.arguments or []:
-        pymethod.arguments.append(
-            PyArgument(
-                name=argument_data.name,
-                type_expr=PyTypeExpr.get_and_cached(argument_data.type),
-                default_value=(
-                    PyValueExpr(
-                        value_expr=argument_data.default_value,
-                        type_expr=PyTypeExpr.get_and_cached(argument_data.type),
-                    )
-                    if argument_data.default_value
-                    else None
-                ),
-            )
-        )
-
-
-# ===============================
-# MARK: 各自独有的映射
-# ===============================
-
-
-def _map_builtin_constants(
-    constants: list[BuiltinClassConstant] | None, pyclass: PyClass
-) -> None:
-    """映射 BuiltinClassConstant 类型的类常量/类属性"""
-    if not constants:
-        return
-    for const in constants:
-        pyclass.members.append(
-            PyMember(
-                name=const.name,
-                type_expr=PyTypeExpr.get_and_cached(str(const.type)),
-                value_expr=PyValueExpr(
-                    value_expr=str(const.value),
-                    type_expr=PyTypeExpr.get_and_cached(str(const.type)),
-                ),
-                inline_comment=const.description,
-            )
-        )
-
-
-def _map_class_constants(
-    constants: list[ClassesConstant] | None, pyclass: PyClass
-) -> None:
-    """映射 ClassesConstant 类型的类常量/类属性"""
-    if not constants:
-        return
-    for const in constants:
-        pyclass.members.append(
-            PyMember(
-                name=const.name,
-                type_expr=PyTypeExpr.get_and_cached("int"),
-                value_expr=PyValueExpr(
-                    value_expr=str(const.value),
-                    type_expr=PyTypeExpr.get_and_cached("int"),
-                ),
-                inline_comment=const.description,
-            )
-        )
-
-
-def _map_signals(cls_data: ClassesSingle, pyclass: PyClass) -> None:
-    """映射信号（特殊类型的类属性）"""
-    for signal_data in cls_data.signals or []:
-        # 创建信号类型表达式
-        colon = ":"
-        #   Signal(Callable((arg1_name:arg1_type|arg2_name:arg2_type|...), None))
-        signal_type_expr = f"Signal(Callable(({'|'.join([arg.name + colon + arg.type for arg in signal_data.arguments or []])}), None))"
-        # 添加信号成员
-        if signal_data.description:
-            replaced_description = signal_data.description.replace("\n", "    ")
-        else:
-            replaced_description = ""
-
-        pyclass.members.append(
-            PyMember(
-                name=signal_data.name,
-                type_expr=PyTypeExpr.get_and_cached(signal_type_expr),
-                inline_comment=replaced_description,
-            )
-        )
-
-
-def _map_operators(cls_data: BuiltinClass, pyclass: PyClass) -> None:
-    """映射运算符重载"""
-
-    # 计算每个运算符出现的次数, 用于判断是否需要@overload
-    number_of_occurrences: dict[str, int] = {}
-    for operator_data in cls_data.operators or []:
-        if operator_data.name in number_of_occurrences:
-            number_of_occurrences[operator_data.name] += 1
-        else:
-            number_of_occurrences[operator_data.name] = 1
-
-    # 添加运算符重载
-    for operator_data in cls_data.operators or []:
-        is_overload = number_of_occurrences[operator_data.name] > 1
-
-        if PyMethod.try_parse_name(operator_data.name):
-
-            if operator_data.right_type:
-                # 二元运算符（如 __add__、__sub__ 等），有 right_type
-                pyclass.methods.append(
-                    PyMethod(
-                        name=PyMethod.OPERATORS_TABLE[operator_data.name],
-                        arguments=[
-                            PyArgument(
-                                name=operator_data.right_type,
-                                type_expr=PyTypeExpr.get_and_cached(
-                                    operator_data.right_type
-                                ),
-                            )
-                        ],
-                        return_type_expr=PyTypeExpr.get_and_cached(
-                            operator_data.return_type
-                        ),
-                        description_lines=(
-                            operator_data.description.splitlines()
-                            if operator_data.description
-                            else []
-                        ),
-                        is_overload=is_overload,
-                    )
-                )
-            else:
-                # 一元运算符（如 __neg__、__invert__ 等），没有 right_type
-                pyclass.methods.append(
-                    PyMethod(
-                        name=PyMethod.OPERATORS_TABLE[operator_data.name],
-                        arguments=[],
-                        return_type_expr=PyTypeExpr.get_and_cached(
-                            operator_data.return_type
-                        ),
-                        description_lines=(
-                            operator_data.description.splitlines()
-                            if operator_data.description
-                            else []
-                        ),
-                        is_overload=is_overload,
-                    )
-                )
-        else:
-            if DEBUG:
-                print(
-                    f"Warning: 不支持的运算符: '{operator_data.name}' 在 '{cls_data.name}' "
-                )
-
-
-def _map_enum(
-    enum_data: GlobalEnum | ClassesEnum | BuiltinClassEnum, pyclass: PyClass
-) -> None:
-    """映射枚举类型"""
-    for enum_value_data in enum_data.values or []:
-        pyclass.class_attributes.append(
-            PyMember(
-                name=enum_value_data.name,
-                type_expr=PyTypeExpr.get_and_cached("int"),
-                value_expr=PyValueExpr(
-                    value_expr=str(enum_value_data.value),
-                    type_expr=PyTypeExpr.get_and_cached("int"),
-                ),
-                inline_comment=enum_value_data.description,
-            )
-        )
-
-
-def _map_class_properties(
-    properties: list[ClassesProperty] | None, pyclass: PyClass
-) -> None:
-    """映射 ClassesProperty 类型的实例属性/成员变量"""
-    if not properties:
-        return
-    for member_data in properties:
-        pyclass.members.append(
-            PyMember(
-                name=member_data.name,
-                type_expr=PyTypeExpr.get_and_cached(member_data.type),
-                inline_comment=member_data.description,
-            )
-        )
-
+import re
+from . import converters
 
 # ===============================
 # 入口
@@ -272,46 +14,55 @@ def _map_class_properties(
 
 @dataclass
 class MapResult:
-    typings_pyi: PyFile
+    typings_pyi: Writer
     enums_pyi: Writer
-    class_enums_pyi: Writer
     init_pyi: Writer
+    alias_pyi: Writer
     c_writer: Writer
 
 
 def map_gdt_to_py(gdt_all_in_one: GodotInOne) -> MapResult:
-    PyType.build_type_sets(gdt_all_in_one)
 
+    # ================
+    # 文件头
+    # ================
     map_result = MapResult(
-        typings_pyi=PyFile(
-            name="typings.pyi",
-            imports=[
-                """import typing""",
-                """from typing import overload""",
-                "from ._class_enums import *",
-                "from .enums import *",
-                "",
-                "",
-                "def default(gdt_expr: str) -> typing.Any: ...",
-            ],
-            classes=[],
-        ),
-        enums_pyi=Writer().write('from typing import Literal\n\n'),
-        class_enums_pyi=Writer().write('from typing import Literal\n\n'),
-        init_pyi=Writer().write(
-'''from . import typings as _typings
+        typings_pyi=Writer().write(
+"""\
+import typing
+from typing import overload
+from .enums import *
 
-class PythonScriptInstance[T: _typings.Object]:
+
+intptr = int
+
+def default(gdt_expr: str) -> typing.Any: ...
+
+"""
+        ),
+        enums_pyi=Writer().write("from typing import Literal\n\n"),
+        init_pyi=Writer().write(
+"""\
+from . import classes
+from . import enums
+
+class PythonScriptInstance[T: classes.Object]:
     @property
     def owner(self) -> T: ...
 
-class GDNativeClass[T: _typings.Object]:
+class GDNativeClass[T: classes.Object]:
     @property
     def script(self) -> PythonScriptInstance[T]: ...
+    def __new__(cls) -> T: ...
 
-class GDBuiltinClass[T: _typings.Variant]: ...
+class GDBuiltinClass[T: classes.Variant]: ...
 
-def Extends[T: _typings.Object](cls: GDNativeClass[T]) -> type[PythonScriptInstance[T]]: ...
+
+"""
+        ),
+        alias_pyi=Writer().write(
+'''\
+import vmath
 '''
         ),
         c_writer=Writer(),
@@ -320,14 +71,22 @@ def Extends[T: _typings.Object](cls: GDNativeClass[T]) -> type[PythonScriptInsta
     c_writer = map_result.c_writer
     c_writer.write('#include "Bindings.hpp"')
 
-    for pytype in PyType.ALL_TYPES.values():
-        if pytype.category == PyTypeCategory.SINGLETON_GODOT_NATIVE:
-            if pytype.name == "ClassDB":
-                header_name = 'class_db_singleton'
-            else:
-                s1 = re.sub("(.)([A-Z][a-z0-9]+)", r"\1_\2", pytype.name)
-                header_name = re.sub("([a-z])([A-Z])", r"\1_\2", s1).lower()
-            c_writer.write(f"#include <godot_cpp/classes/{header_name}.hpp>")
+    # for pytype in PyType.ALL_TYPES.values():
+    #     if pytype.category == PyTypeCategory.SINGLETON_GODOT_NATIVE:
+    #         if pytype.name == "ClassDB":
+    #             header_name = 'class_db_singleton'
+    #         else:
+    #             s1 = re.sub("(.)([A-Z][a-z0-9]+)", r"\1_\2", pytype.name)
+    #             header_name = re.sub("([a-z])([A-Z])", r"\1_\2", s1).lower()
+    #         c_writer.write(f"#include <godot_cpp/classes/{header_name}.hpp>")
+
+    for clazz in gdt_all_in_one.singletons:
+        if clazz.name == "ClassDB":
+            header_name = "class_db_singleton"
+        else:
+            s1 = re.sub("(.)([A-Z][a-z0-9]+)", r"\1_\2", clazz.name)
+            header_name = re.sub("([a-z])([A-Z])", r"\1_\2", s1).lower()
+        c_writer.write(f"#include <godot_cpp/classes/{header_name}.hpp>")
 
     c_writer.write("")
     c_writer.write("namespace pkpy {")
@@ -336,92 +95,112 @@ def Extends[T: _typings.Object](cls: GDNativeClass[T]) -> type[PythonScriptInsta
     c_writer.indent()
 
     # ===============================
-    # MARK: class single
+    # MARK: build converters
     # ===============================
-    class_single_classes: list[PyClass] = []
-    for cls_data in gdt_all_in_one.classes:
-        pyclass = PyClass(
-            type=PyType.get(cls_data.name),
-            description_lines=[],
-            members=[],
-            class_attributes=[],
-            methods=[],
-        )
-        # 处理各种属性
-        _map_class_properties(cls_data.properties, pyclass)
-        _map_methods(cls_data, pyclass)
-        _map_class_constants(cls_data.constants, pyclass)
-        _map_signals(cls_data, pyclass)
-        class_single_classes.append(pyclass)
+    converters.BUILTIN_TYPES.update(
+        set(cls.name for cls in gdt_all_in_one.builtin_classes)
+    )
 
-    # ===============================
-    # MARK: builtin class
-    # ===============================
-    builtin_classes: list[PyClass] = []
-    for cls_data in gdt_all_in_one.builtin_classes:
-        pyclass = PyClass(
-            type=PyType.get(cls_data.name),
-            description_lines=[],
-            members=[],
-            class_attributes=[],
-            methods=[],
-        )
-        # 处理各种属性
-        _map_methods(cls_data, pyclass)
-        _map_builtin_constants(cls_data.constants, pyclass)
-        _map_operators(cls_data, pyclass)
-        builtin_classes.append(pyclass)
-
-    # ===============================
-    # MARK: enum
-    # ===============================
-    # --- global enum ---
-    gen_global_enums(map_result.enums_pyi, gdt_all_in_one.global_enums)
-    for enum_data in gdt_all_in_one.global_enums:
-        pyclass = PyClass(
-            type=PyType.get(enum_data.name),
-            description_lines=[],
-            members=[],
-            class_attributes=[],
-            methods=[],
-        )
-        _map_enum(enum_data, pyclass)
-
-    # --- classes enum ---
-    enums_w = map_result.class_enums_pyi
+    converters.NATIVE_TYPES.update(set(cls.name for cls in gdt_all_in_one.classes))
 
     for cls_data in gdt_all_in_one.classes + gdt_all_in_one.builtin_classes:
         if not cls_data.enums:
             continue
         cls_name = cls_data.name
         enum_cls_name = f"{cls_name}Enum"
-        PyType._CLASS_TO_CLASS_ENUM[cls_name] = enum_cls_name
-        enums_w.write(f'class {enum_cls_name}:')
+
+        for enum_data in cls_data.enums:
+            for v in enum_data.values or []:
+                # HTTPRequest, HTTPRequest.Result, HTTPRequestEnum, Result, RESULT_SUCCESS, 0
+                # HTTPRequest, HTTPRequest.Result, HTTPRequestEnum, Result, RESULT_CHUNKED_BODY_SIZE_MISMATCH, 1
+                # HTTPRequest, HTTPRequest.Result, HTTPRequestEnum, Result, ..., ...
+                converters.append_records(
+                    converters.CLASS_ENUM_DATA,
+                    {
+                        "cls_name": cls_name,
+                        "orign_enum_name": cls_name + "." + enum_data.name,
+                        "cls_enum_name": enum_cls_name,
+                        "enum_name": enum_data.name,
+                        "enum_constant_name": v.name,
+                        "constant_value": v.value,
+                    },
+                )
+
+    for enum in gdt_all_in_one.global_enums:
+        if "." in enum.name:
+            cls_name, enum_name = enum.name.split(".")
+            for v in enum.values:
+                # Variant.Type, Variant_Type, TYPE_NIL, 0
+                # Variant.Type, Variant_Type, TYPE_BOOL, 1
+                # Variant.Type, Variant_Type, ..., ...
+                converters.append_records(
+                    converters.GLOBAL_ENUMS_DATA,
+                    {
+                        "orign_enum_name": enum.name,
+                        "converted_enum_name": cls_name + "_" + enum_name,
+                        "enum_constant_name": v.name,
+                        "constant_value": v.value,
+                    },
+                )
+
+        else:
+            for v in enum.values:
+                # MethodFlags, MethodFlags, METHOD_FLAG_NORMAL, 1
+                # MethodFlags, MethodFlags, METHOD_FLAG_EDITOR, 2
+                # MethodFlags, MethodFlags, ..., ...
+                converters.append_records(
+                    converters.GLOBAL_ENUMS_DATA,
+                    {
+                        "orign_enum_name": enum.name,
+                        "converted_enum_name": enum.name,
+                        "enum_constant_name": v.name,
+                        "constant_value": v.value,
+                    },
+                )
+
+    for builtin_class in gdt_all_in_one.builtin_classes:
+        cls_name = converters.convert_class_name(builtin_class.name)
+        if builtin_class.operators:
+            for op in builtin_class.operators:
+                if converters.is_supported_operator(op.name):
+                    op_name = converters.convert_operator_to_method_name(op.name)
+                    converters.append_records(
+                        converters.BUILTIN_CLASSES_SUPPORTED_OPERATOR_DATA,
+                        {
+                            "orign_cls_name": builtin_class.name,  # 原始的类名
+                            "cls_name": cls_name,  # 转换后的类名
+                            "orign_op_name": op.name,  # 原始的运算符名称
+                            "op_name": op_name,  # 转换后的运算符名称
+                        },
+                    )
+
+
+    # ===============================
+    # MARK: enum
+    # ===============================
+    # --- global enum ---
+    gen_global_enums(map_result.enums_pyi, gdt_all_in_one.global_enums)
+
+    # --- classes enum ---
+    enums_w = map_result.enums_pyi
+
+    for cls_data in gdt_all_in_one.classes + gdt_all_in_one.builtin_classes:
+        if not cls_data.enums:
+            continue
+        cls_name = cls_data.name
+        enum_cls_name = f"{cls_name}Enum"
+        enums_w.write(f"class {enum_cls_name}:")
         enums_w.indent()
 
-        aliases = []
         for enum_data in cls_data.enums:
-            alias_name = cls_name + "_" + enum_data.name
-            PyType._CLASS_ENUM_TO_CLASS[alias_name] = cls_name
-            aliases.append((alias_name, enum_data.name))
-            pyclass = PyClass(
-                type=PyType.get(alias_name),
-                description_lines=[],
-                members=[],
-                class_attributes=[],
-                methods=[],
-            )
-            # 处理各种属性
-            _map_enum(enum_data, pyclass)
 
             if isinstance(enum_data, ClassesEnum):
                 gen_class_enum(enums_w, enum_data)
             else:
                 gen_builtin_class_enum(enums_w, enum_data)
+
         enums_w.dedent()
-        for alias_name, enum_name in aliases:
-            enums_w.write(f"{alias_name} = {enum_cls_name}.{enum_name}")
-        enums_w.write('\n')
+        enums_w.write("\n")
 
     # ===============================
     # __init__.pyi
@@ -429,55 +208,506 @@ def Extends[T: _typings.Object](cls: GDNativeClass[T]) -> type[PythonScriptInsta
     #
     #   Resource = GDNativeClass[_typings.Resource]('Resource')
     #   Engine = GDNativeSingleton[_typings.Engine]('Engine')
-    for pytype in PyType.ALL_TYPES.values():
-        if pytype.category == PyTypeCategory.SINGLETON_GODOT_NATIVE:
-            map_result.init_pyi.write(f"{pytype.name}: _typings.{pytype.name}")
+    # for pytype in PyType.ALL_TYPES.values():
+    #     if pytype.category == PyTypeCategory.SINGLETON_GODOT_NATIVE:
+    #         map_result.init_pyi.write(f"{pytype.name}: _typings.{pytype.name}")
 
-            cpp_name = pytype.name
-            if cpp_name == "ClassDB":
-                cpp_name = "ClassDBSingleton"
-            c_writer.write(
-                f'register_GDNativeSingleton("{pytype.name}", {cpp_name}::get_singleton());'
+    #         cpp_name = pytype.name
+    #         if cpp_name == "ClassDB":
+    #             cpp_name = "ClassDBSingleton"
+    #         c_writer.write(
+    #             f'register_GDNativeSingleton("{pytype.name}", {cpp_name}::get_singleton());'
+    #         )
+
+    # c_writer.write("")
+    # for pytype in PyType.ALL_TYPES.values():
+    #     if pytype.category == PyTypeCategory.GODOT_NATIVE:
+    #         if pytype.name in PyType.NO_OBJECT_VARIANT_TYPES:
+    #             map_result.init_pyi.write(f"{pytype.name}: GDBuiltinClass[_typings.{pytype.name}]")
+    #         else:
+    #             map_result.init_pyi.write(f"{pytype.name}: GDNativeClass[_typings.{pytype.name}]")
+    #         c_writer.write(f'register_GDNativeClass("{pytype.name}");')
+
+
+
+    # ======MARK: Builtin + Native
+    class_writer: Writer = map_result.typings_pyi
+
+    # -----手动定义Variant
+    class_writer.write("class Variant:")
+    class_writer.indent()
+    class_writer.write("...")
+    class_writer.dedent()
+    class_writer.write("")
+
+    for clazz in gdt_all_in_one.builtin_classes + gdt_all_in_one.classes:
+
+        is_empty_class: bool = True
+        # ------class xxx(xxx):
+        class_name: str = converters.convert_class_name(clazz.name)
+
+        if isinstance(clazz, BuiltinClass):
+            class_inherits = "Variant"
+        else:
+            class_inherits = (
+                converters.convert_class_name(clazz.inherits)
+                if clazz.inherits
+                else None
             )
 
-    c_writer.write("")
-    for pytype in PyType.ALL_TYPES.values():
-        if pytype.category == PyTypeCategory.GODOT_NATIVE:
-            if pytype.name in PyType.NO_OBJECT_VARIANT_TYPES:
-                map_result.init_pyi.write(f"{pytype.name}: GDBuiltinClass[_typings.{pytype.name}]")
-            else:
-                map_result.init_pyi.write(f"{pytype.name}: GDNativeClass[_typings.{pytype.name}]")
-            c_writer.write(f'register_GDNativeClass("{pytype.name}");')
-
-
-
-    # ===============================
-    # typings.pyi
-    # ===============================
-    for class_single_class in class_single_classes:
-        map_result.typings_pyi.classes.append(class_single_class)
-
-    for builtin_class in builtin_classes:
-        map_result.typings_pyi.classes.append(builtin_class)
-
-    #   Variant
-    pyclass = PyClass(
-        type=PyType.get("Variant"),
-        description_lines=[],
-        members=[],
-        class_attributes=[],
-        methods=[],
-    )
-    map_result.typings_pyi.classes.append(pyclass)
-
-    #   intptr
-    map_result.typings_pyi.global_variables.append(
-        SpecifiedPyMember(
-            specified_string="intptr = int",
-            inline_comment="intptr is a pointer to an unknown type (const void*)",
+        class_writer.writefmt(
+            "class {0}{1}:", class_name, f"({class_inherits})" if class_inherits else ""
         )
-    )
 
+        class_writer.indent()
+
+        # ------Member variables
+        if isinstance(clazz, BuiltinClass):
+            member_vars = clazz.members
+        else:
+            member_vars = clazz.properties
+
+        if member_vars:
+            for member_data in member_vars:
+
+                member_name: str = converters.convert_keyword_name(member_data.name)
+                member_type: str = converters.convert_type_name(member_data.type)
+
+                class_writer.writefmt("{0}: {1}", member_name, member_type)
+
+            class_writer.write("")
+            is_empty_class = False
+
+        # ------Signals
+        if isinstance(clazz, BuiltinClass):
+            signals = None
+        else:
+            signals = clazz.signals
+
+            if signals:
+
+                for signal in signals:
+                    signal_name = converters.convert_keyword_name(signal.name)
+                    signal_args = signal.arguments or []
+
+                    arg_comment_expr_list = []
+                    arg_expr_list = []
+                    for signal_arg in signal_args:
+
+                        arg_name = converters.convert_keyword_name(signal_arg.name)
+                        arg_type = converters.convert_type_name(signal_arg.type)
+
+                        arg_comment_expr_list.append(arg_name + ":" + arg_type)
+                        arg_expr_list.append(arg_type)
+
+                    class_writer.writefmt(
+                        "{0}: Signal[typing.Callable[[{1}], None]]  # {2}",
+                        signal.name,
+                        ", ".join(arg_expr_list),
+                        (
+                            ", ".join(arg_comment_expr_list)
+                            if arg_comment_expr_list
+                            else "no arguments"
+                        ),
+                    )
+
+                class_writer.write("")
+                is_empty_class = False
+                
+        # ------Class variables
+        if isinstance(clazz, BuiltinClass):
+            class_consts = clazz.constants
+        else:
+            class_consts = clazz.constants
+
+        if class_consts:
+            for const in class_consts:
+                const_name = converters.convert_keyword_name(const.name)
+                value = str(const.value)
+                class_writer.write(f"{const_name} = default({value!r})")  # TODO
+
+            class_writer.write("")
+            is_empty_class = False
+
+        # ------Operators
+        if isinstance(clazz, BuiltinClass):
+            operators = clazz.operators
+        else:
+            operators = None
+
+        if operators:
+            for operator in operators:
+                orign_operator_name = operator.name
+
+                if converters.is_supported_operator(orign_operator_name):
+                    operator_name = converters.convert_operator_to_method_name(
+                        orign_operator_name
+                    )
+                    return_type = operator.return_type
+                    right_type = operator.right_type
+
+                    if converters.is_overload_operator(class_name, operator_name):
+                        class_writer.write("@overload")
+
+                    if right_type:
+                        class_writer.write(
+                            f"def {operator_name}(self, right_{right_type}: {right_type}) -> {return_type}: ..."
+                        )
+                    else:
+                        class_writer.write(
+                            f"def {operator_name}(self) -> {return_type}: ..."
+                        )
+                        
+            class_writer.write("")
+            is_empty_class = False
+
+        # ------Class methods
+        if clazz.methods:
+            for method in clazz.methods:
+                ret_t = "None"
+                if isinstance(method, (ClassesMethod, ClassesMethodVirtual)):
+                    if method.return_value:
+                        ret_t = converters.convert_type_name(method.return_value.type)
+                else:
+                    ret_t = (
+                        converters.convert_type_name(method.return_type)
+                        if method.return_type
+                        else "None"
+                    )
+
+                # ------Arguments
+                arg_expr = []
+                if method.is_static:
+                    class_writer.write("@staticmethod")
+                else:
+                    arg_expr.append("self")
+
+                for arg in method.arguments or []:
+
+                    arg_name = converters.convert_keyword_name(arg.name)
+                    arg_type = converters.convert_type_name(arg.type)
+                    if arg.default_value:
+                        arg_default_value = f"default({arg.default_value!r})"
+                    else:
+                        arg_default_value = None
+
+                    expr = f"{arg_name}: {arg_type}"
+                    if arg.default_value is not None:
+                        expr += f" = {arg_default_value}"
+                    arg_expr.append(expr)
+
+                if method.is_vararg:
+                    arg_expr.append(f"*args")
+
+                # ------Method
+                method_name = converters.convert_keyword_name(method.name)
+                class_writer.writefmt(
+                    "def {0}({1}) -> {2}: ...",
+                    method_name,
+                    ", ".join(arg_expr),
+                    ret_t,
+                )
+
+            class_writer.write("")
+            is_empty_class = False
+
+        if is_empty_class:
+            class_writer.write("...")
+        class_writer.dedent()
+        class_writer.write("")
+
+
+    # ======MARK: __init__.pyi
+    init_writer = map_result.init_pyi
+    for clazz in gdt_all_in_one.builtin_classes + gdt_all_in_one.classes:
+        cls_name = converters.convert_class_name(clazz.name)
+        cls_type_name = converters.convert_class_name(clazz.name).split('[')[0]  # 忽略模板参数
+        records = converters.find_records(converters.CLASS_ENUM_DATA, {'cls_name': cls_name})
+        cls_enum = None
+        if len(records) > 0:
+            cls_enum = records.iloc[0].loc['cls_enum_name']
+        
+        if isinstance(clazz, BuiltinClass):
+            inherit_1 = f'GDBuiltinClass[classes.{cls_type_name}]'
+        else:
+            inherit_1 = f'GDNativeClass[classes.{cls_type_name}]'
+        
+        if cls_enum:
+            inherit_2 = f'enums.{cls_enum}'
+        else:
+            inherit_2 = None
+        
+        if inherit_2:
+            init_writer.write(f'class {cls_name}({inherit_1}, {inherit_2}): ...')
+        else:
+            init_writer.write(f'class {cls_name}({inherit_1}): ...')
+    
+    
+    # ======MARK: alias.pyi
+    alias_writer = map_result.alias_pyi
+    
+
+
+    # # 折叠
+
+    # # =======Builtin Classes=======
+    # builtin_class_writer: Writer = map_result.typings_pyi
+    # for builtin_class_data in gdt_all_in_one.builtin_classes:
+
+    #     # ------class xxx(xxx):
+    #     class_name: str = builtin_class_data.name
+    #     class_inherits: str|None = "Variant"
+
+    #     builtin_class_writer.write(
+    #         "class {0}{1}:".format(
+    #             class_name,
+    #             f"({class_inherits})" if class_inherits else ""
+    #         )
+    #     )
+
+    #     builtin_class_writer.indent()
+    #     # ------Member variables
+
+    #     builtin_class_member_vars: list[BuiltinClassMember]|None = builtin_class_data.members
+
+    #     if builtin_class_member_vars:
+    #         for member_data in builtin_class_member_vars:
+
+    #             member_name: str = member_data.name
+    #             member_type: str = "Any"
+    #             member_desc: str|None = member_data.description
+
+    #             builtin_class_writer.write(
+    #                 f'{member_name}: {member_type}' + f"# {member_desc}" if member_desc else ""
+    #                 )
+
+    #         builtin_class_writer.write('')
+    #     # ------Class variables
+
+    #     class_vars: list[BuiltinClassConstant]|None = builtin_class_data.constants
+
+    #     if class_vars:
+    #         for class_var_data in class_vars:
+
+    #             class_var_name: str = class_var_data.name
+    #             class_var_value: int = "default"
+    #             class_var_desc: str|None = class_var_data.description
+
+    #             if class_var_desc:
+    #                 builtin_class_writer.write(f"{class_var_name} = {class_var_value}  # {class_var_desc}")
+    #             else:
+    #                 builtin_class_writer.write(f'{class_var_name} = {class_var_value}')
+
+    #         builtin_class_writer.write('')
+    #     # ------Operators
+    #     operators: list[BuiltinClassOperator]|None = builtin_class_data.operators
+
+    #     if operators:
+    #         for operator in operators:
+
+    #             # TODO: 筛选和转换
+
+    #             operator_name = operator.name
+    #             operator_right_type: str = "Any"
+    #             operator_return_type: str = "Any"
+
+    #             builtin_class_writer.write(
+    #                 f'def {operator_name}(self, {operator_right_type} -> {operator_return_type}:'
+    #             )
+
+    #             builtin_class_writer.indent()
+    #             builtin_class_writer.write("...")
+    #             builtin_class_writer.dedent()
+
+    #     # ------'__init__'s
+    #     constructers: list[BuiltinClassConstructor]|None = builtin_class_data.constructors
+    #     if constructers:
+    #         for constructer in constructers:
+
+    #             # ------__init__ parameters
+    #             constructer_params: list[BuiltinClassConstructorArgument]|None = constructer.arguments
+
+    #             params: list[str] = []
+    #             if constructer_params:
+    #                 for arg in constructer_params:
+
+    #                     arg_name: str = arg.name
+    #                     arg_type: str = arg.type
+
+    #                     params.append(f'{arg_name}: {arg_type}')
+
+    #             # ------__init__
+    #             params_str: str = ", ".join(params)
+    #             is_overload: bool = len(constructers) > 1
+
+    #             if is_overload:
+    #                 builtin_class_writer.write('@overload')
+
+    #             builtin_class_writer.write((f'def __init__(self, {params_str}):'))
+
+    #             builtin_class_writer.indent()
+    #             builtin_class_writer.dedent()
+
+    #     # ------Class methods
+
+    #     class_methods: list[BuiltinClassMethod]|None = builtin_class_data.methods
+
+    #     if class_methods:
+    #         for method_data in class_methods:
+
+    #             # ------Method parameters
+    #             method_params: list[BuiltinClassMehodArgument]|None = method_data.arguments
+
+    #             params: list[str] = []
+    #             if method_params:
+    #                 for arg in method_params:
+
+    #                     arg_name: str = arg.name
+    #                     arg_type: str = arg.type
+    #                     arg_default_value: str|None = arg.default_value
+
+    #                     if arg_default_value:
+    #                         params.append(f'{arg_name}: {arg_type} = {arg_default_value}')
+    #                     else:
+    #                         params.append(f'{arg_name}: {arg_type}')
+
+    #             # ------Method
+    #             params_str: str = ", ".join(params)
+    #             method_name: str = method_data.name
+    #             method_return_type: str|None = method_data.return_type
+    #             is_static: bool = method_data.is_static
+    #             is_abstract: bool = method_data.is_vararg
+    #             is_const: bool = method_data.is_const  #  ???
+
+    #             if is_static:
+    #                 builtin_class_writer.write("@staticmethod")
+    #             if method_return_type:
+    #                 builtin_class_writer.write(f'def {method_name}({params_str}) -> {method_return_type}:')
+    #             else:
+    #                 builtin_class_writer.write(f'def {method_name}({params_str}):')
+
+    #             builtin_class_writer.indent()
+    #             builtin_class_writer.write('...')
+    #             builtin_class_writer.dedent()
+
+    #         builtin_class_writer.write("")
+
+    #     builtin_class_writer.dedent()
+
+    # # =======Native Classe======
+    # native_class_writer: Writer = map_result.typings_pyi
+    # for native_class_data in gdt_all_in_one.classes:
+
+    #     # ------class xxx(xxx):
+    #     class_name: str = native_class_data.name
+    #     class_inherits: str|None = "Any"
+
+    #     native_class_writer.write(
+    #         "class {0}{1}:".format(
+    #             class_name,
+    #             f"({class_inherits})" if class_inherits else ""
+    #         )
+    #     )
+
+    #     native_class_writer.indent()
+    #     # ------Member variables
+
+    #     native_class_member_vars: list[ClassesProperty]|None = native_class_data.properties
+
+    #     if native_class_member_vars:
+    #         for member_data in native_class_member_vars:
+
+    #             member_name: str = member_data.name
+    #             member_type: str = member_data.type
+    #             member_desc: str|None = member_data.description
+
+    #             builtin_class_writer.write(
+    #                 f'{member_name}: {member_type}' + f"# {member_desc}" if member_desc else ""
+    #                 )
+
+    #         builtin_class_writer.write('')
+
+    #     # ------Signals
+
+    #     class_signals: list[ClassesSignal]|None = native_class_data.signals
+
+    #     if class_signals:
+    #         for signal in class_signals:
+
+    #             # ------Signal params
+    #             signal_params: list[ClassesSignalArgument]|None = signal.arguments
+
+    #             param_types: list[str] = []
+    #             param_names: list[str] = []
+    #             if signal_params:
+    #                 for arg in signal_params:
+
+    #                     arg_name: str = arg.name
+    #                     arg_type: str = arg.type
+
+    #                     param_types.append(f'{arg_type}')
+    #                     param_names.append(f'{arg_name}')
+
+    #             # ------Signal
+    #             params_str: str = ', '.join(param_types)
+    #             params_comment_str: str = ', '.join([f'{name}: type' for name, type in zip(param_names, param_types)])
+    #             signal_name: str = signal.name
+    #             signal_desc: str|None = signal.description
+
+    #             if signal_desc:
+    #                 native_class_writer.write(f'{signal_name} = Signal[typing.Callable[{params_str}, None]]:  # {signal_desc} {params_comment_str}')
+    #             else:
+    #                 native_class_writer.write(f'{signal_name} = Signal[typing.Callable[{params_str}, None]]:    # {params_comment_str}')
+
+    #     # ------Class variables
+    #     class_vars: list[ClassesConstant]|None = native_class_data.constants
+
+    #     if class_vars:
+    #         for class_var_data in class_vars:
+
+    #             class_var_name: str = class_var_data.name
+    #             class_var_value: int = class_var_data.value
+    #             class_var_desc: str|None = class_var_data.description
+
+    #             if class_var_desc:
+    #                 builtin_class_writer.write(f"{class_var_name} = {class_var_value}  # {class_var_desc}")
+    #             else:
+    #                 builtin_class_writer.write(f'{class_var_name} = {class_var_value}')
+
+    #         builtin_class_writer.write('')
+    #     # ------Properties
+    #     class_properties: list[ClassesProperty]|None = native_class_data.properties
+
+    #     if class_properties:
+    #         for class_property in class_properties:
+
+    #             class_property_type: str = class_property.type
+    #             class_property_name: str = class_property.name
+    #             class_property_desc: str|None = class_property.description
+
+    #             native_class_writer.write('@property')
+    #             if class_property_desc:
+    #                 native_class_writer.write(
+    #                     f"def {class_property_name}(self) -> {class_property_type}:"
+    #                 )
+
+    #             native_class_writer.indent()
+
+    #             if class_property_desc:
+
+    #                 native_class_writer.write(f'"""{class_property_desc}"""')
+    #             native_class_writer.write('...')
+    #             native_class_writer.dedent()
+
+    #     # ------Methods
+
+    #         # ------Static methods
+
+    #         # ------Instance methods
+
+    #     native_class_writer.dedent()
+
+    # --------C----------
     c_writer.dedent()
     c_writer.write("}")
     c_writer.write("")
