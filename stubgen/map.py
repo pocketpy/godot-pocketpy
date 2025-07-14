@@ -94,6 +94,20 @@ import vmath
     c_writer.write("void setup_bindings_generated() {")
     c_writer.indent()
 
+    for clazz in gdt_all_in_one.singletons:
+        cpp_name = clazz.name
+        if cpp_name == "ClassDB":
+            cpp_name = "ClassDBSingleton"
+        c_writer.write(
+            f'register_GDNativeSingleton("{clazz.name}", {cpp_name}::get_singleton());'
+        )
+
+    for clazz in gdt_all_in_one.classes + gdt_all_in_one.builtin_classes:
+        c_writer.write(f'register_GDNativeClass("{clazz.name}");')
+    for enum in gdt_all_in_one.global_enums:
+        for v in enum.values:
+            c_writer.write(f'register_GlobalConstant("{v.name}", {v.value});')
+
     # ===============================
     # MARK: build converters
     # ===============================

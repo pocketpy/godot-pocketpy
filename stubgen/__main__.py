@@ -19,7 +19,7 @@ export_writer(map_result.enums_pyi, GODOT_TYPINGS_PATH + 'enums.pyi')
 export_writer(map_result.init_pyi, GODOT_TYPINGS_PATH + '__init__.pyi')
 export_writer(map_result.c_writer, 'src/lang/BindingsGenerated.cpp')
 export_writer(map_result.typings_pyi, GODOT_TYPINGS_PATH + 'classes.pyi')
-export_writer(map_result.typings_pyi, GODOT_TYPINGS_PATH + 'alias.pyi')
+export_writer(map_result.alias_pyi, GODOT_TYPINGS_PATH + 'alias.pyi')
 
 
 # 以防alias.pyi找不到vmath的类型

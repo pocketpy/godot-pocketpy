@@ -9,7 +9,7 @@ class MyScript(Extends(Node)):
 	w = export(str, default='ab')
 
 	def __init__(self):
-		print('__init__()')
+		print('__init__()', TYPE_BOOL)
 		print(TileSet.TILE_LAYOUT_STACKED_OFFSET)
 		print('==>', test.add('hello', ' world'))
 		#print("==>", self.x, self.y, self.z, self.w)
