@@ -6,8 +6,9 @@ namespace pkpy {
 static PythonContext *_pyctx;
 
 PythonContext *pyctx() {
-	if (!_pyctx)
+	if (!_pyctx) {
 		_pyctx = new PythonContext();
+	}
 	return _pyctx;
 }
 

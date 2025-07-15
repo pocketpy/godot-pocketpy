@@ -18,7 +18,7 @@ static bool Variant_getattribute(py_Ref self, py_Name name) {
 	if (v->get_type() == Variant::OBJECT) {
 		Object *obj = v->operator Object *();
 		bool derived_from_Node = obj->is_class("Node");
-		if (derived_from_Node && name == py_name("script")) {
+		if (derived_from_Node && name == pyctx()->names.script) {
 			PythonScriptInstance *inst = PythonScriptInstance::attached_to_object(obj);
 			if (inst != nullptr) {
 				py_assign(py_retval(), &inst->py);
@@ -142,6 +142,8 @@ void setup_python_bindings() {
 	pyctx()->main_thread_id = std::this_thread::get_id();
 	pyctx()->lock.clear();
 	pyctx()->names.__init__ = py_name("__init__");
+	pyctx()->names.script = py_name("script");
+
 	py_callbacks()->gc_mark = PythonScriptInstance::gc_mark_instances;
 	py_callbacks()->print = [](const char *msg) {
 		String s(msg);
@@ -237,10 +239,10 @@ void setup_python_bindings() {
 			return TypeError("Variant is not callable");
 		}
 		Callable callable(*self);
-		// int64_t args_count = callable.get_argument_count();
-		// if (args_count >= 0 && args_count != argc - 1) {
-		// 	return TypeError("expected %d arguments, got %d", args_count, argc - 1);
-		// }
+		int64_t args_count = callable.get_argument_count();
+		if (args_count >= 1 && args_count != argc - 1) {
+			return TypeError("expected %d arguments, got %d", args_count, argc - 1);
+		}
 		Array godot_args;
 		for (int i = 1; i < argc; i++) {
 			godot_args.push_back(py_tovariant(&argv[i]));
