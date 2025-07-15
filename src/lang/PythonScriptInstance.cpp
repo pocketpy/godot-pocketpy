@@ -29,7 +29,8 @@ GDExtensionBool set_func(PythonScriptInstance *p_instance, const StringName *p_n
 }
 
 GDExtensionBool get_func(PythonScriptInstance *p_instance, const StringName *p_name, Variant *p_value) {
-	bool is_defined = p_instance->script->meta.default_values.has(*p_name);
+	PythonScriptMeta *meta = &p_instance->script->meta;
+	bool is_defined = meta->default_values.has(*p_name) || meta->signals.has(*p_name);
 	if (is_defined) {
 		py_ItemRef res = py_getdict(&p_instance->py, godot_name_to_python(*p_name));
 		if (res) {

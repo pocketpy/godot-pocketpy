@@ -6,6 +6,7 @@
 #include <godot_cpp/templates/hash_set.hpp>
 
 #include "PythonScriptLanguage.hpp"
+#include "godot_cpp/variant/packed_string_array.hpp"
 #include "pocketpy.h"
 
 #include <atomic>
@@ -21,6 +22,7 @@ struct PythonScriptMeta {
 	StringName extends;
 	HashMap<StringName, Variant> default_values;
 	HashMap<StringName, int> methods;
+	HashMap<StringName, PackedStringArray> signals;
 	bool is_valid;
 
 	PythonScriptMeta() :
@@ -30,6 +32,7 @@ struct PythonScriptMeta {
 			extends(),
 			default_values(),
 			methods(),
+			signals(),
 			is_valid(false) {
 	}
 };
@@ -82,6 +85,7 @@ public:
 	Variant _new(const Variant **args, GDExtensionInt arg_count, GDExtensionCallError &error);
 
 	PythonScriptMeta meta;
+
 protected:
 	static void _bind_methods();
 	virtual String _to_string() const;
@@ -89,7 +93,7 @@ protected:
 	void _update_placeholder_exports(void *placeholder) const;
 
 	String source_code;
-	
+
 	bool placeholder_fallback_enabled;
 
 	// TODO: use instance member instead of static map if "_placeholder_instance_create" is changed to be non-const

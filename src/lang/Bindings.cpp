@@ -66,9 +66,9 @@ static bool GDNativeClass_getattribute(py_Ref self, py_Name name) {
 
 static void setup_exports() {
 	// export
-	pyctx()->tp_ExportStatement = py_newtype("_ExportStatement", tp_object, pyctx()->godot, [](void *ud) {
-		ExportStatement *self = (ExportStatement *)ud;
-		self->~ExportStatement();
+	pyctx()->tp_DefineStatement = py_newtype("_DefineStatement", tp_object, pyctx()->godot, [](void *ud) {
+		DefineStatement *self = (DefineStatement *)ud;
+		self->~DefineStatement();
 	});
 
 	py_bind(pyctx()->godot, "export(cls, default=None)", [](int argc, py_Ref argv) -> bool {
@@ -100,8 +100,8 @@ static void setup_exports() {
 			return TypeError("expected 'type' or 'GDNativeClass', got '%t'", py_typeof(&argv[0]));
 		}
 
-		ExportStatement *ud = (ExportStatement *)py_newobject(py_retval(), pyctx()->tp_ExportStatement, 0, sizeof(ExportStatement));
-		ud->index = ctx->next_index();
+		ExportStatement *ud = (ExportStatement *)py_newobject(py_retval(), pyctx()->tp_DefineStatement, 0, sizeof(ExportStatement));
+		new (ud) ExportStatement(ctx->next_index());
 		ud->template_ = "@export var ?: " + type_name;
 		ud->default_value = py_tovariant(&argv[1]);
 		return true;
@@ -109,8 +109,8 @@ static void setup_exports() {
 
 	py_bind(pyctx()->godot, "export_range(min, max, step, *extra_hints, default=None)", [](int argc, py_Ref argv) -> bool {
 		auto ctx = &pyctx()->reloading_context;
-		ExportStatement *ud = (ExportStatement *)py_newobject(py_retval(), pyctx()->tp_ExportStatement, 0, sizeof(ExportStatement));
-		ud->index = ctx->next_index();
+		ExportStatement *ud = (ExportStatement *)py_newobject(py_retval(), pyctx()->tp_DefineStatement, 0, sizeof(ExportStatement));
+		new (ud) ExportStatement(ctx->next_index());
 		Variant min = py_tovariant(&argv[0]);
 		Variant max = py_tovariant(&argv[1]);
 		Variant step = py_tovariant(&argv[2]);
@@ -119,6 +119,18 @@ static void setup_exports() {
 		ud->default_value = py_tovariant(&argv[4]);
 		if (any_is_float && ud->default_value.get_type() == Variant::INT) {
 			ud->default_value = (double)ud->default_value;
+		}
+		return true;
+	});
+
+	py_bindfunc(pyctx()->godot, "signal", [](int argc, py_Ref argv) -> bool {
+		auto ctx = &pyctx()->reloading_context;
+		SignalStatement *ud = (SignalStatement *)py_newobject(py_retval(), pyctx()->tp_DefineStatement, 0, sizeof(SignalStatement));
+		new (ud) SignalStatement(ctx->next_index());
+		for (int i = 0; i < argc; i++) {
+			PY_CHECK_ARG_TYPE(i, tp_str);
+			const char *arg_cstr = py_tostr(py_arg(i));
+			ud->arguments.append(String::utf8(arg_cstr));
 		}
 		return true;
 	});
@@ -221,10 +233,10 @@ void setup_python_bindings() {
 			return TypeError("Variant is not callable");
 		}
 		Callable callable(*self);
-		int64_t args_count = callable.get_argument_count();
-		if (args_count >= 0 && args_count != argc - 1) {
-			return TypeError("expected %d arguments, got %d", args_count, argc - 1);
-		}
+		// int64_t args_count = callable.get_argument_count();
+		// if (args_count >= 0 && args_count != argc - 1) {
+		// 	return TypeError("expected %d arguments, got %d", args_count, argc - 1);
+		// }
 		Array godot_args;
 		for (int i = 1; i < argc; i++) {
 			godot_args.push_back(py_tovariant(&argv[i]));

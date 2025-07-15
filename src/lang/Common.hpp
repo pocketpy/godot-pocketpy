@@ -39,7 +39,7 @@ struct PythonContext {
 	py_Type tp_NativeClass;
 	py_Type tp_Variant;
 	// internals
-	py_Type tp_ExportStatement;
+	py_Type tp_DefineStatement;
 	std::thread::id main_thread_id;
 	std::atomic_flag lock;
 	PythonScriptReloadingContext reloading_context;
@@ -48,14 +48,39 @@ struct PythonContext {
 	} names;
 };
 
-struct ExportStatement {
+struct DefineStatement {
 	int index;
+	String name;
+
+	DefineStatement(int index) :
+			index(index), name() {}
+
+	bool operator<(const DefineStatement &other) const {
+		return index < other.index;
+	}
+
+	virtual bool is_signal() const = 0;
+	virtual ~DefineStatement() = default;
+};
+
+struct ExportStatement : DefineStatement {
 	String template_;
-	StringName name;
 	Variant default_value;
 
-	bool operator<(const ExportStatement &other) const {
-		return index < other.index;
+	using DefineStatement::DefineStatement;
+
+	bool is_signal() const override {
+		return false;
+	}
+};
+
+struct SignalStatement : DefineStatement {
+	PackedStringArray arguments;
+
+	using DefineStatement::DefineStatement;
+
+	bool is_signal() const override {
+		return true;
 	}
 };
 

@@ -10,6 +10,8 @@
 #include "godot_cpp/core/class_db.hpp"
 #include "godot_cpp/core/error_macros.hpp"
 #include "godot_cpp/godot.hpp"
+#include "godot_cpp/variant/dictionary.hpp"
+#include "godot_cpp/variant/signal.hpp"
 
 #include <stdlib.h>
 #include <thread>
@@ -69,6 +71,13 @@ void *PythonScript::_instance_create(Object *for_object) const {
 	for (const auto &it : meta.default_values) {
 		py_Name name = godot_name_to_python(it.key);
 		Variant value = it.value.duplicate();
+		py_newvariant(py_retval(), &value);
+		py_setdict(&ud->py, name, py_retval());
+	}
+	// assign signals
+	for (const auto &it : meta.signals) {
+		py_Name name = godot_name_to_python(it.key);
+		Variant value = Signal(for_object, it.key);
 		py_newvariant(py_retval(), &value);
 		py_setdict(&ud->py, name, py_retval());
 	}
@@ -160,37 +169,43 @@ Error PythonScript::_reload(bool keep_state) {
 	}
 
 	exposed_type = py_totype(exposed_class);
-	Vector<ExportStatement> exports;
+	Vector<DefineStatement *> defines;
 
-	std::pair<Vector<ExportStatement> *, PythonScriptMeta *> ctx_pair = { &exports, &new_meta };
+	std::pair<Vector<DefineStatement *> *, PythonScriptMeta *> ctx_pair = { &defines, &new_meta };
 
 	py_applydict(
 			exposed_class, [](py_Name name, py_ItemRef value, void *ctx) -> bool {
-				auto ctx_pair = (std::pair<Vector<ExportStatement> *, PythonScriptMeta *> *)ctx;
-				Vector<ExportStatement> *exports = ctx_pair->first;
-				PythonScriptMeta *meta = ctx_pair->second;
+				auto ctx_pair = (std::pair<Vector<DefineStatement *> *, PythonScriptMeta *> *)ctx;
+				Vector<DefineStatement *> *defines = ctx_pair->first;
+				PythonScriptMeta *new_meta = ctx_pair->second;
 				StringName name_godot = python_name_to_godot(name);
 
-				if (py_istype(value, pyctx()->tp_ExportStatement)) {
-					ExportStatement *e = (ExportStatement *)py_touserdata(value);
-					e->name = name_godot;
-					exports->push_back(*e);
+				if (py_istype(value, pyctx()->tp_DefineStatement)) {
+					DefineStatement *d = (DefineStatement *)py_touserdata(value);
+					d->name = name_godot;
+					defines->push_back(d);
 				} else if (py_istype(value, tp_function)) {
-					meta->methods[name_godot] = 0;
+					new_meta->methods[name_godot] = 0;
 				}
 				return true;
 			},
 			&ctx_pair);
 
-	exports.sort();
+	defines.sort();
 
 	PackedStringArray buffer;
 	buffer.push_back("# " + get_path());
 	buffer.push_back("extends " + ctx->extends);
 	buffer.push_back("");
-	for (const ExportStatement &e : exports) {
-		buffer.push_back(e.template_.replace("?", e.name));
-		new_meta.default_values[e.name] = e.default_value;
+	for (DefineStatement *d : defines) {
+		if (d->is_signal()) {
+			SignalStatement *s = (SignalStatement *)d;
+			new_meta.signals[s->name] = s->arguments;
+		} else {
+			ExportStatement *e = (ExportStatement *)d;
+			buffer.push_back(e->template_.replace("?", e->name));
+			new_meta.default_values[e->name] = e->default_value;
+		}
 	}
 
 	Ref<GDScript> gds = memnew(GDScript);
@@ -255,11 +270,22 @@ ScriptLanguage *PythonScript::_get_language() const {
 }
 
 bool PythonScript::_has_script_signal(const StringName &p_signal) const {
-	return false;
+	return meta.signals.has(p_signal);
 }
 
 TypedArray<Dictionary> PythonScript::_get_script_signal_list() const {
 	TypedArray<Dictionary> signals;
+	for (const auto &it : meta.signals) {
+		const PackedStringArray &arguments = it.value;
+		StringName name = it.key;
+		MethodInfo mi;
+		mi.name = name;
+		for (int i = 0; i < arguments.size(); i++) {
+			mi.arguments.push_back(PropertyInfo(Variant::Type::NIL, arguments[i]));
+		}
+		Dictionary signal_info(mi);
+		signals.push_back(signal_info);
+	}
 	return signals;
 }
 
