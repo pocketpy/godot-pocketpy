@@ -36,7 +36,7 @@ struct PythonScriptReloadingContext {
 struct PythonContext {
 	py_GlobalRef godot;
 	py_Type tp_Script;
-	py_Type tp_NativeClass;
+	py_Type tp_GDNativeClass;
 	py_Type tp_Variant;
 	// internals
 	py_Type tp_DefineStatement;
@@ -46,6 +46,14 @@ struct PythonContext {
 	struct {
 		py_Name __init__;
 	} names;
+};
+
+struct GDNativeClass {
+	Variant::Type type;
+	StringName name;
+
+	GDNativeClass(Variant::Type type, StringName clazz) :
+			type(type), name(clazz) {}
 };
 
 struct DefineStatement {
