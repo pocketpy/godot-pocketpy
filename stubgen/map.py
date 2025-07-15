@@ -35,13 +35,13 @@ def fill_converters(gdt_all_in_one: GodotInOne):
         if not cls_data.enums:
             continue
         cls_name = cls_data.name
-        enum_cls_name = f"{cls_name}Enum"
+        enum_cls_name = f"{cls_name}StaticExtension"
     
         for enum_data in cls_data.enums:
             for v in enum_data.values or []:
-                # HTTPRequest, HTTPRequest.Result, HTTPRequestEnum, Result, RESULT_SUCCESS, 0
-                # HTTPRequest, HTTPRequest.Result, HTTPRequestEnum, Result, RESULT_CHUNKED_BODY_SIZE_MISMATCH, 1
-                # HTTPRequest, HTTPRequest.Result, HTTPRequestEnum, Result, ..., ...
+                # HTTPRequest, HTTPRequest.Result, HTTPRequestStaticExtension, Result, RESULT_SUCCESS, 0
+                # HTTPRequest, HTTPRequest.Result, HTTPRequestStaticExtension, Result, RESULT_CHUNKED_BODY_SIZE_MISMATCH, 1
+                # HTTPRequest, HTTPRequest.Result, HTTPRequestStaticExtension, Result, ..., ...
                 converters.append_records(
                     converters.CLASS_ENUM_DATA,
                     {
@@ -460,13 +460,13 @@ from typing import Literal
         if not cls_data.enums:
             continue
         cls_name = cls_data.name
-        enum_cls_name = f"{cls_name}Enum"
+        enum_cls_name = f"{cls_name}StaticExtension"
         enums_w.write(f"class {enum_cls_name}:")
         enums_w.indent()
     
         for enum_data in cls_data.enums:
     
-            if isinstance(enum_data, ClassesEnum):
+            if isinstance(enum_data, ClassesStaticExtension):
                 enum.gen_class_enum(enums_w, enum_data)
             else:
                 enum.gen_builtin_class_enum(enums_w, enum_data)
