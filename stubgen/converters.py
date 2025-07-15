@@ -72,15 +72,25 @@ COMPATIBLE_TYPES_MAP: dict[str, str] = {
 
 
 def convert_type_name(name: str) -> str:
+    result = None
+    
+    
+    
 
-    # 复合类型
-    if "," in name:
-        return "typing.Any"  # TODO: 第三轮
 
     # 内置类型
-    result = None
     if name in COMPATIBLE_TYPES_MAP:
         result = COMPATIBLE_TYPES_MAP[name]
+        
+    elif "," in name:
+        # 复合类型
+        pattern = r'^([^-]+?)(?:,(?!,)(-?[^,-]+))*(?!,)$' # 该表达式匹配以非减号内容开头，后跟零个或多个逗号分隔的字段（这些字段可以有可选前缀减号），并禁止减号出现在第一部分且确保所有字段非空。
+        
+        match = re.match(pattern, name)  
+        if match:
+            result = convert_type_name(match.group(1))  # "xxx,yyy,-zzz"只返回"xxx"
+        else:
+            raise ValueError(f"Invalid type name format --->{name}<---")
 
     # 枚举类型
     elif name.startswith("enum::"):
@@ -150,8 +160,10 @@ def convert_type_name(name: str) -> str:
     elif bool(re.fullmatch(r"const [A-Za-z0-9_]+\.[A-Za-z0-9_]*\s?\*\*?", name)):
         result = "intptr"
 
-    if not result or not is_valid_type_name(result):
+    if not result:
         raise ValueError(f"Unknown type: {name}")
+    if not is_valid_type_name(result):
+        raise ValueError(f"Invalid result: {result}")
     return result
 
 
@@ -309,5 +321,21 @@ def convert_operator_to_method_name(op: str) -> str:
     if op not in OPERATORS_TABLE:
         raise ValueError(f"不支持的操作符: {op}")
     return OPERATORS_TABLE.get(op, op)
+
+
+
+
+ALIAS_CLASS_DATA = pd.DataFrame({
+    "cls_name": [],  # e.g. "Vector2"
+    "alternative_cls_name": [],  # e.g. "vec2""
+    "module_abs_path": [],  # e.g. "vmath" (由于vmath可以通过 import vmath 导入, 因此模块路径就是 "vmath")
+})
+append_records(ALIAS_CLASS_DATA, [
+    {"cls_name": "Vector2",     "alternative_cls_name": "vec2",     "module_abs_path": "vmath"},
+    {"cls_name": "Vector2i",    "alternative_cls_name": "vec2i",    "module_abs_path": "vmath"},
+    {"cls_name": "Vector3",     "alternative_cls_name": "vec3",     "module_abs_path": "vmath"},
+    {"cls_name": "Vector3i",    "alternative_cls_name": "vec3i",    "module_abs_path": "vmath"},
+    {"cls_name": "Color",       "alternative_cls_name": "color32",  "module_abs_path": "vmath"}
+])
 
 

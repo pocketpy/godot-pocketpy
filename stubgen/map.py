@@ -151,6 +151,7 @@ def gen_typings_pyi_writer(gdt_all_in_one: GodotInOne, pyi_writer: Writer) -> Wr
 import typing
 from typing import overload
 from .enums import *
+from . import alias
 
 
 intptr = int
@@ -273,14 +274,21 @@ def default(gdt_expr: str) -> typing.Any: ...
                     )
                     return_type = operator.return_type
                     right_type = operator.right_type
+                    right_type_is_alias = right_type in list(converters.ALIAS_CLASS_DATA.loc[:, "cls_name"])
     
                     if converters.is_overload_operator(class_name, operator_name):
                         class_writer.write("@overload")
     
                     if right_type:
-                        class_writer.write(
-                            f"def {operator_name}(self, right_{right_type}: {right_type}) -> {return_type}: ..."
-                        )
+                        alias_module_path = "alias"
+                        if right_type_is_alias:
+                            class_writer.write(
+                                f"def {operator_name}(self, right_{right_type}: {alias_module_path}.{right_type}) -> {return_type}: ..."
+                            )
+                        else:
+                            class_writer.write(
+                                f"def {operator_name}(self, right_{right_type}: {right_type}) -> {return_type}: ..."
+                            )
                     else:
                         class_writer.write(
                             f"def {operator_name}(self) -> {return_type}: ..."
@@ -314,12 +322,19 @@ def default(gdt_expr: str) -> typing.Any: ...
     
                     arg_name = converters.convert_keyword_name(arg.name)
                     arg_type = converters.convert_type_name(arg.type)
+                    arg_type_is_alias = arg_type in list(converters.ALIAS_CLASS_DATA.loc[:, "cls_name"])
+                    
                     if arg.default_value:
                         arg_default_value = f"default({arg.default_value!r})"
                     else:
                         arg_default_value = None
     
-                    expr = f"{arg_name}: {arg_type}"
+                    if arg_type_is_alias:
+                        alias_module_path = "alias"
+                        expr = f"{arg_name}: {alias_module_path}.{arg_type}"
+                    else:
+                        expr = f"{arg_name}: {arg_type}"
+                        
                     if arg.default_value is not None:
                         expr += f" = {arg_default_value}"
                     arg_expr.append(expr)
@@ -348,12 +363,34 @@ def default(gdt_expr: str) -> typing.Any: ...
     return pyi_writer
 
 def gen_alias_pyi_writer(gdt_all_in_one: GodotInOne, pyi_writer: Writer) -> Writer:
+    
+    modules = map(str, set(converters.ALIAS_CLASS_DATA.loc[:, "module_abs_path"]))
+    
     pyi_writer.write(
-'''\
-import vmath
+f'''\
+import {', '.join(modules)}
+from . import classes
+
+
 '''
     )
     
+    # 只有builtin_classes才有替用的类
+    for clazz in gdt_all_in_one.builtin_classes:
+        cls_name = converters.convert_class_name(clazz.name)
+        found_records = converters.find_records(converters.ALIAS_CLASS_DATA, {"cls_name":cls_name})
+        if len(found_records) > 0:
+            
+            alternative_cls_with_module_exprs: list[str] = []  # ["vmath.vec2", "vmath.vec3", ...]
+            for _, record in found_records.iterrows():
+                alternative_cls_with_module_exprs.append(record.loc['module_abs_path'] + "." + record.loc['alternative_cls_name'])
+                
+            pyi_writer.writefmt("{0} = classes.{1} | {2}",
+                cls_name,
+                cls_name,
+                " | ".join(alternative_cls_with_module_exprs)
+            )
+        
     
     return pyi_writer
 
