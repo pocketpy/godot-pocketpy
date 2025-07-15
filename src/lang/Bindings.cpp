@@ -1,6 +1,8 @@
 #include "Bindings.hpp"
 #include "PythonScriptInstance.hpp"
+#include "pocketpy/pocketpy.h"
 
+#include "godot_cpp/core/class_db.hpp"
 #include <godot_cpp/classes/engine.hpp>
 #include <godot_cpp/classes/file_access.hpp>
 #include <godot_cpp/classes/node.hpp>
@@ -47,8 +49,8 @@ static bool Variant_setattribute(py_Ref self, py_Name name, py_Ref value) {
 }
 
 static StringName to_GDNativeClass(py_Ref self) {
-	py_Name *p = (py_Name *)py_totrivial(self);
-	return python_name_to_godot(*p);
+	GDNativeClass *p = (GDNativeClass *)py_totrivial(self);
+	return p->name;
 }
 
 static bool GDNativeClass_getattribute(py_Ref self, py_Name name) {
@@ -93,8 +95,8 @@ static void setup_exports() {
 				default:
 					return TypeError("cannot export type '%t'", type);
 			}
-		} else if (py_istype(&argv[0], pyctx()->tp_NativeClass)) {
-			PY_CHECK_ARG_TYPE(0, pyctx()->tp_NativeClass);
+		} else if (py_istype(&argv[0], pyctx()->tp_GDNativeClass)) {
+			PY_CHECK_ARG_TYPE(0, pyctx()->tp_GDNativeClass);
 			type_name = to_GDNativeClass(&argv[0]);
 		} else {
 			return TypeError("expected 'type' or 'GDNativeClass', got '%t'", py_typeof(&argv[0]));
@@ -189,19 +191,21 @@ void setup_python_bindings() {
 			NULL);
 
 	// GDNativeClass
-	pyctx()->tp_NativeClass = py_newtype("GDNativeClass", tp_object, godot, NULL);
+	pyctx()->tp_GDNativeClass = py_newtype("GDNativeClass", tp_object, godot, NULL);
 
-	py_tphookattributes(pyctx()->tp_NativeClass, GDNativeClass_getattribute, NULL, NULL);
+	py_tphookattributes(pyctx()->tp_GDNativeClass, GDNativeClass_getattribute, NULL, NULL);
 
-	py_bindmethod(pyctx()->tp_NativeClass, "__call__", [](int argc, py_Ref argv) -> bool {
+	py_bindmethod(pyctx()->tp_GDNativeClass, "__call__", [](int argc, py_Ref argv) -> bool {
 		PY_CHECK_ARGC(1);
-		PY_CHECK_ARG_TYPE(0, pyctx()->tp_NativeClass);
-		StringName clazz = to_GDNativeClass(argv);
-		Object *obj = ClassDB::instantiate(clazz);
-		if (!obj) {
-			return RuntimeError("failed to instantiate class '%n'", godot_name_to_python(clazz));
+		PY_CHECK_ARG_TYPE(0, pyctx()->tp_GDNativeClass);
+		GDNativeClass *p = (GDNativeClass *)py_totrivial(argv);
+		if (!ClassDB::can_instantiate(p->name)) {
+			return RuntimeError("cannot instantiate class '%n'", godot_name_to_python(p->name));
 		}
-		Variant res(obj);
+		Variant res = ClassDB::instantiate(p->name);
+		if (!res) {
+			return RuntimeError("failed to instantiate class '%n'", godot_name_to_python(p->name));
+		}
 		py_newvariant(py_retval(), &res);
 		return true;
 	});
@@ -210,7 +214,7 @@ void setup_python_bindings() {
 	py_bindfunc(godot, "Extends", [](int argc, py_Ref argv) -> bool {
 		auto ctx = &pyctx()->reloading_context;
 		PY_CHECK_ARGC(1);
-		PY_CHECK_ARG_TYPE(0, pyctx()->tp_NativeClass);
+		PY_CHECK_ARG_TYPE(0, pyctx()->tp_GDNativeClass);
 		StringName nativeClass = to_GDNativeClass(argv);
 		ctx->extends = nativeClass;
 		py_assign(py_retval(), py_tpobject(pyctx()->tp_Script));
@@ -358,10 +362,11 @@ void setup_python_bindings() {
 	setup_bindings_generated();
 }
 
-void register_GDNativeClass(const char *name) {
+void register_GDNativeClass(Variant::Type type, const char *name) {
 	py_TValue tmp;
 	py_Name sn = py_name(name);
-	py_newtrivial(&tmp, pyctx()->tp_NativeClass, &sn, sizeof(void *));
+	GDNativeClass clazz(type, python_name_to_godot(sn));
+	py_newtrivial(&tmp, pyctx()->tp_GDNativeClass, &clazz, sizeof(GDNativeClass));
 	py_setdict(pyctx()->godot, sn, &tmp);
 }
 

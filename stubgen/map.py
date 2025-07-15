@@ -132,8 +132,9 @@ def gen_c_writer(gdt_all_in_one:GodotInOne, c_writer: Writer) -> Writer:
             f'register_GDNativeSingleton("{clazz.name}", {cpp_name}::get_singleton());'
         )
 
-    for clazz in gdt_all_in_one.classes + gdt_all_in_one.builtin_classes:
-        c_writer.write(f'register_GDNativeClass("{clazz.name}");')
+    for clazz in gdt_all_in_one.builtin_classes + gdt_all_in_one.classes:
+        variant_type = converters.CLASS_TO_VARIANT_TYPE.get(clazz.name, 'Variant::OBJECT')
+        c_writer.write(f'register_GDNativeClass({variant_type}, "{clazz.name}");')
     for enum in gdt_all_in_one.global_enums:
         for v in enum.values:
             c_writer.write(f'register_GlobalConstant("{v.name}", {v.value});')

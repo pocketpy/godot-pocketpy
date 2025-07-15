@@ -41,6 +41,55 @@ GENERIC_CLASS_MAP: dict[str, str] = {
     "Callable": "Callable[T, R]",
     "Array": "Array[T]",
 }
+CLASS_TO_VARIANT_TYPE: dict[str, str] = {
+    "Nil": "Variant::NIL",
+
+    # atomic types
+    "bool": "Variant::BOOL",
+    "int": "Variant::INT",
+    "float": "Variant::FLOAT",
+    "String": "Variant::STRING",
+
+    # math types
+    "Vector2": "Variant::VECTOR2",
+    "Vector2i": "Variant::VECTOR2I",
+    "Rect2": "Variant::RECT2",
+    "Rect2i": "Variant::RECT2I",
+    "Vector3": "Variant::VECTOR3",
+    "Vector3i": "Variant::VECTOR3I",
+    "Transform2D": "Variant::TRANSFORM2D",
+    "Vector4": "Variant::VECTOR4",
+    "Vector4i": "Variant::VECTOR4I",
+    "Plane": "Variant::PLANE",
+    "Quaternion": "Variant::QUATERNION",
+    "AABB": "Variant::AABB",
+    "Basis": "Variant::BASIS",
+    "Transform3D": "Variant::TRANSFORM3D",
+    "Projection": "Variant::PROJECTION",
+
+    # misc types
+    "Color": "Variant::COLOR",
+    "StringName": "Variant::STRING_NAME",
+    "NodePath": "Variant::NODE_PATH",
+    "RID": "Variant::RID",
+    "Object": "Variant::OBJECT",
+    "Callable": "Variant::CALLABLE",
+    "Signal": "Variant::SIGNAL",
+    "Dictionary": "Variant::DICTIONARY",
+    "Array": "Variant::ARRAY",
+
+    # typed arrays
+    "PackedByteArray": "Variant::PACKED_BYTE_ARRAY",
+    "PackedInt32Array": "Variant::PACKED_INT32_ARRAY",
+    "PackedInt64Array": "Variant::PACKED_INT64_ARRAY",
+    "PackedFloat32Array": "Variant::PACKED_FLOAT32_ARRAY",
+    "PackedFloat64Array": "Variant::PACKED_FLOAT64_ARRAY",
+    "PackedStringArray": "Variant::PACKED_STRING_ARRAY",
+    "PackedVector2Array": "Variant::PACKED_VECTOR2_ARRAY",
+    "PackedVector3Array": "Variant::PACKED_VECTOR3_ARRAY",
+    "PackedColorArray": "Variant::PACKED_COLOR_ARRAY",
+    "PackedVector4Array": "Variant::PACKED_VECTOR4_ARRAY",
+}
 
 
 def convert_class_name(name: str) -> str:
