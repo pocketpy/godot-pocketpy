@@ -141,9 +141,10 @@ static void setup_exports() {
 }
 
 bool handle_gde_call_error(GDExtensionCallError error) {
+	if (error.error == GDEXTENSION_CALL_OK) {
+		return true;
+	}
 	switch (error.error) {
-		case GDEXTENSION_CALL_OK:
-			return true;
 		case GDEXTENSION_CALL_ERROR_INVALID_METHOD:
 			return RuntimeError("GDEXTENSION_CALL_ERROR_INVALID_METHOD");
 		case GDEXTENSION_CALL_ERROR_INVALID_ARGUMENT:
@@ -155,6 +156,8 @@ bool handle_gde_call_error(GDExtensionCallError error) {
 			return RuntimeError("GDEXTENSION_CALL_ERROR_INSTANCE_IS_NULL");
 		case GDEXTENSION_CALL_ERROR_METHOD_NOT_CONST:
 			return RuntimeError("GDEXTENSION_CALL_ERROR_METHOD_NOT_CONST");
+		default:
+			return RuntimeError("GDExtensionCallError: %d", (int)error.error);
 	}
 }
 
@@ -242,7 +245,7 @@ void setup_python_bindings() {
 
 			UninitializedVariant uninitialized_res;
 			GDExtensionCallError error;
-			internal::gdextension_interface_variant_construct((GDExtensionVariantType)p->type, uninitialized_res.ptr(), (const GDExtensionConstVariantPtr *)arguments_ptr.ptr(), arguments_ptr.size(), &error);
+			internal::gdextension_interface_variant_construct((GDExtensionVariantType)p->type, uninitialized_res.ptr(), (const GDExtensionConstVariantPtr *)arguments_ptr.ptr(), (int)arguments_ptr.size(), &error);
 			if (!handle_gde_call_error(error)) {
 				return false;
 			}
