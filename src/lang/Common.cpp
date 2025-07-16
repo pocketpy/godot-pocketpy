@@ -160,6 +160,59 @@ void py_newvariant(py_OutRef out, const Variant *val) {
 	}
 }
 
+Variant to_variant_exact(py_Ref val) {
+	assert(py_istype(val, pyctx()->tp_Variant));
+	switch (val->extra) {
+		case Variant::VECTOR2: {
+			return *(Vector2 *)py_totrivial(val);
+		}
+		case Variant::VECTOR2I: {
+			return *(Vector2i *)py_totrivial(val);
+		}
+		case Variant::RECT2: {
+			return *(Rect2 *)py_totrivial(val);
+		}
+		case Variant::RECT2I: {
+			return *(Rect2i *)py_totrivial(val);
+		}
+		case Variant::VECTOR3: {
+			return *(Vector3 *)py_totrivial(val);
+		}
+		case Variant::VECTOR3I: {
+			return *(Vector3i *)py_totrivial(val);
+		}
+		case Variant::VECTOR4: {
+			return *(Vector4 *)py_totrivial(val);
+		}
+		case Variant::VECTOR4I: {
+			return *(Vector4i *)py_totrivial(val);
+		}
+		case Variant::PLANE: {
+			return *(Plane *)py_totrivial(val);
+		}
+		case Variant::QUATERNION: {
+			return *(Quaternion *)py_totrivial(val);
+		}
+		case Variant::COLOR: {
+			return *(Color *)py_totrivial(val);
+		}
+		case Variant::RID: {
+			return *(RID *)py_totrivial(val);
+		}
+		case Variant::OBJECT: {
+			assert(val->is_ptr);
+			void *ud = py_touserdata(val);
+			return *static_cast<Variant *>(ud);
+		}
+		default: {
+			int extra = val->extra;
+			String msg = "py_tovariant: unknown Variant type: " + String::num_int64(extra);
+			ERR_PRINT(msg);
+			return Variant();
+		}
+	}
+}
+
 Variant py_tovariant(py_Ref val) {
 	switch (py_typeof(val)) {
 		case tp_NoneType:
@@ -199,56 +252,7 @@ Variant py_tovariant(py_Ref val) {
 			return Color(r, g, b, a);
 		}
 		default: {
-			assert(py_istype(val, pyctx()->tp_Variant));
-			switch (val->extra) {
-				case Variant::VECTOR2: {
-					return *(Vector2 *)py_totrivial(val);
-				}
-				case Variant::VECTOR2I: {
-					return *(Vector2i *)py_totrivial(val);
-				}
-				case Variant::RECT2: {
-					return *(Rect2 *)py_totrivial(val);
-				}
-				case Variant::RECT2I: {
-					return *(Rect2i *)py_totrivial(val);
-				}
-				case Variant::VECTOR3: {
-					return *(Vector3 *)py_totrivial(val);
-				}
-				case Variant::VECTOR3I: {
-					return *(Vector3i *)py_totrivial(val);
-				}
-				case Variant::VECTOR4: {
-					return *(Vector4 *)py_totrivial(val);
-				}
-				case Variant::VECTOR4I: {
-					return *(Vector4i *)py_totrivial(val);
-				}
-				case Variant::PLANE: {
-					return *(Plane *)py_totrivial(val);
-				}
-				case Variant::QUATERNION: {
-					return *(Quaternion *)py_totrivial(val);
-				}
-				case Variant::COLOR: {
-					return *(Color *)py_totrivial(val);
-				}
-				case Variant::RID: {
-					return *(RID *)py_totrivial(val);
-				}
-				case Variant::OBJECT: {
-					assert(val->is_ptr);
-					void *ud = py_touserdata(val);
-					return *static_cast<Variant *>(ud);
-				}
-				default: {
-					int extra = val->extra;
-					String msg = "py_tovariant: unknown Variant type: " + String::num_int64(extra);
-					ERR_PRINT(msg);
-					return Variant();
-				}
-			}
+			return to_variant_exact(val);
 		}
 	}
 }

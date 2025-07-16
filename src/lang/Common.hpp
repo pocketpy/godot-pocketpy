@@ -124,6 +124,7 @@ void py_newvariant(py_OutRef out, const Variant *val);
 void py_newstring(py_OutRef out, String val);
 
 Variant py_tovariant(py_Ref val);
+Variant to_variant_exact(py_Ref val);
 
 struct PythonContextLock {
 	PythonContextLock() {

@@ -1,6 +1,7 @@
 #include "Bindings.hpp"
 #include "PythonScriptInstance.hpp"
 #include "gdextension_interface.h"
+#include "godot_cpp/variant/variant.hpp"
 #include "pocketpy/pocketpy.h"
 
 #include "godot_cpp/core/class_db.hpp"
@@ -15,9 +16,9 @@ namespace pkpy {
 void setup_bindings_generated();
 
 static bool Variant_getattribute(py_Ref self, py_Name name) {
-	Variant *v = (Variant *)py_touserdata(self);
-	if (v->get_type() == Variant::OBJECT) {
-		Object *obj = v->operator Object *();
+	Variant v = to_variant_exact(self);
+	if (v.get_type() == Variant::OBJECT) {
+		Object *obj = v.operator Object *();
 		bool derived_from_Node = obj->is_class("Node");
 		if (derived_from_Node && name == pyctx()->names.script) {
 			PythonScriptInstance *inst = PythonScriptInstance::attached_to_object(obj);
@@ -31,7 +32,7 @@ static bool Variant_getattribute(py_Ref self, py_Name name) {
 	}
 
 	bool r_valid;
-	Variant res = v->get_named(python_name_to_godot(name), r_valid);
+	Variant res = v.get_named(python_name_to_godot(name), r_valid);
 	if (!r_valid) {
 		return AttributeError(self, name);
 	}
@@ -40,9 +41,9 @@ static bool Variant_getattribute(py_Ref self, py_Name name) {
 }
 
 static bool Variant_setattribute(py_Ref self, py_Name name, py_Ref value) {
-	Variant *v = (Variant *)py_touserdata(self);
+	Variant v = to_variant_exact(self);
 	bool r_valid;
-	v->set_named(python_name_to_godot(name), py_tovariant(value), r_valid);
+	v.set_named(python_name_to_godot(name), py_tovariant(value), r_valid);
 	if (!r_valid) {
 		return AttributeError(self, name);
 	}
@@ -229,13 +230,19 @@ void setup_python_bindings() {
 			py_newvariant(py_retval(), &res);
 		} else {
 			Vector<Variant> arguments;
+			arguments.resize(argc - 1);
 			for (int i = 1; i < argc; i++) {
-				arguments.append(py_tovariant(py_arg(i)));
+				arguments.write[i - 1] = py_tovariant(&argv[i]);
+			}
+			Vector<GDExtensionConstVariantPtr> arguments_ptr;
+			arguments_ptr.resize(arguments.size());
+			for (int i = 0; i < arguments.size(); i++) {
+				arguments_ptr.write[i] = &arguments[i];
 			}
 
 			UninitializedVariant uninitialized_res;
 			GDExtensionCallError error;
-			internal::gdextension_interface_variant_construct((GDExtensionVariantType)p->type, uninitialized_res.ptr(), (const GDExtensionConstVariantPtr *)arguments.ptr(), arguments.size(), &error);
+			internal::gdextension_interface_variant_construct((GDExtensionVariantType)p->type, uninitialized_res.ptr(), (const GDExtensionConstVariantPtr *)arguments_ptr.ptr(), arguments_ptr.size(), &error);
 			if (!handle_gde_call_error(error)) {
 				return false;
 			}
@@ -266,11 +273,11 @@ void setup_python_bindings() {
 	py_tphookattributes(type, Variant_getattribute, Variant_setattribute, NULL);
 
 	py_bindmethod(type, "__call__", [](int argc, py_Ref argv) -> bool {
-		Variant *self = (Variant *)py_touserdata(&argv[0]);
-		if (self->get_type() != Variant::CALLABLE) {
+		Variant self = to_variant_exact(&argv[0]);
+		if (self.get_type() != Variant::CALLABLE) {
 			return TypeError("Variant is not callable");
 		}
-		Callable callable(*self);
+		Callable callable(self);
 		int64_t args_count = callable.get_argument_count();
 		// 0 maybe is_vararg
 		if (args_count >= 1 && args_count != argc - 1) {
@@ -286,10 +293,10 @@ void setup_python_bindings() {
 	});
 
 	py_bindmethod(type, "__getitem__", [](int argc, py_Ref argv) -> bool {
-		Variant *self = (Variant *)py_touserdata(&argv[0]);
+		Variant self = to_variant_exact(&argv[0]);
 		Variant key = py_tovariant(&argv[1]);
 		bool r_valid;
-		Variant value = self->get_keyed(key, r_valid);
+		Variant value = self.get_keyed(key, r_valid);
 		if (r_valid) {
 			py_newvariant(py_retval(), &value);
 			return true;
@@ -298,11 +305,11 @@ void setup_python_bindings() {
 	});
 
 	py_bindmethod(type, "__setitem__", [](int argc, py_Ref argv) -> bool {
-		Variant *self = (Variant *)py_touserdata(&argv[0]);
+		Variant self = to_variant_exact(&argv[0]);
 		Variant key = py_tovariant(&argv[1]);
 		Variant value = py_tovariant(&argv[2]);
 		bool r_valid;
-		self->set_keyed(key, value, r_valid);
+		self.set_keyed(key, value, r_valid);
 		if (r_valid) {
 			py_newnone(py_retval());
 			return true;
@@ -311,60 +318,60 @@ void setup_python_bindings() {
 	});
 
 	py_bindmethod(type, "__bool__", [](int argc, py_Ref argv) -> bool {
-		Variant *self = (Variant *)py_touserdata(&argv[0]);
-		bool res = self->booleanize();
+		Variant self = to_variant_exact(&argv[0]);
+		bool res = self.booleanize();
 		py_newbool(py_retval(), res);
 		return true;
 	});
 
 	py_bindmethod(type, "__hash__", [](int argc, py_Ref argv) -> bool {
-		auto self = (Variant *)py_touserdata(&argv[0]);
-		py_newint(py_retval(), self->hash());
+		Variant self = to_variant_exact(&argv[0]);
+		py_newint(py_retval(), self.hash());
 		return true;
 	});
 
 	py_bindmethod(type, "__repr__", [](int argc, py_Ref argv) -> bool {
-		Variant *self = (Variant *)py_touserdata(&argv[0]);
-		String type_name = Variant::get_type_name(self->get_type());
+		Variant self = to_variant_exact(&argv[0]);
+		String type_name = Variant::get_type_name(self.get_type());
 		String r = "<godot.Variant " + type_name + ">";
 		py_newstring(py_retval(), r);
 		return true;
 	});
 
 	py_bindmethod(type, "__str__", [](int argc, py_Ref argv) -> bool {
-		Variant *self = (Variant *)py_touserdata(&argv[0]);
-		py_newstring(py_retval(), self->stringify());
+		Variant self = to_variant_exact(&argv[0]);
+		py_newstring(py_retval(), self.stringify());
 		return true;
 	});
 
-#define DEF_UNARY_OP(__name, __op)                                      \
-	py_bindmethod(type, __name, [](int argc, py_Ref argv) -> bool {     \
-		PY_CHECK_ARGC(1);                                               \
-		Variant *self = (Variant *)py_touserdata(&argv[0]);             \
-		Variant other;                                                  \
-		Variant r_ret;                                                  \
-		bool r_valid;                                                   \
-		Variant::evaluate(Variant::__op, *self, other, r_ret, r_valid); \
-		if (r_valid) {                                                  \
-			py_newvariant(py_retval(), &r_ret);                         \
-			return true;                                                \
-		}                                                               \
-		return RuntimeError("!r_valid");                                \
+#define DEF_UNARY_OP(__name, __op)                                     \
+	py_bindmethod(type, __name, [](int argc, py_Ref argv) -> bool {    \
+		PY_CHECK_ARGC(1);                                              \
+		Variant self = to_variant_exact(&argv[0]);                     \
+		Variant other;                                                 \
+		Variant r_ret;                                                 \
+		bool r_valid;                                                  \
+		Variant::evaluate(Variant::__op, self, other, r_ret, r_valid); \
+		if (r_valid) {                                                 \
+			py_newvariant(py_retval(), &r_ret);                        \
+			return true;                                               \
+		}                                                              \
+		return RuntimeError("!r_valid");                               \
 	});
 
-#define DEF_BINARY_OP(__name, __op)                                     \
-	py_bindmethod(type, __name, [](int argc, py_Ref argv) -> bool {     \
-		PY_CHECK_ARGC(2);                                               \
-		Variant *self = (Variant *)py_touserdata(&argv[0]);             \
-		Variant other = py_tovariant(&argv[1]);                         \
-		Variant r_ret;                                                  \
-		bool r_valid;                                                   \
-		Variant::evaluate(Variant::__op, *self, other, r_ret, r_valid); \
-		if (r_valid) {                                                  \
-			py_newvariant(py_retval(), &r_ret);                         \
-			return true;                                                \
-		}                                                               \
-		return RuntimeError("!r_valid");                                \
+#define DEF_BINARY_OP(__name, __op)                                    \
+	py_bindmethod(type, __name, [](int argc, py_Ref argv) -> bool {    \
+		PY_CHECK_ARGC(2);                                              \
+		Variant self = to_variant_exact(&argv[0]);                     \
+		Variant other = py_tovariant(&argv[1]);                        \
+		Variant r_ret;                                                 \
+		bool r_valid;                                                  \
+		Variant::evaluate(Variant::__op, self, other, r_ret, r_valid); \
+		if (r_valid) {                                                 \
+			py_newvariant(py_retval(), &r_ret);                        \
+			return true;                                               \
+		}                                                              \
+		return RuntimeError("!r_valid");                               \
 	});
 
 	DEF_BINARY_OP("__eq__", OP_EQUAL)
