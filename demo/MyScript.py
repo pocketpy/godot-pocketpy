@@ -21,6 +21,7 @@ class MyScript(Extends(Node)):
 		print('==>', self.owner, self.owner.script)
 		print('==>', self.x, self.y, self.z, self.w)
 		print('==> path:', self.owner.get_path())
+		print('==> vector2:', Vector2(1.5, 2.5))
 		
 		self.health_changed.emit(100, 200)
 

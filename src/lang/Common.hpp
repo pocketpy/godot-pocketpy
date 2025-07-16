@@ -57,6 +57,19 @@ struct GDNativeClass {
 			type(type), name(clazz) {}
 };
 
+class UninitializedVariant {
+	alignas(8) char data[sizeof(Variant)];
+
+public:
+	~UninitializedVariant() {
+		((Variant *)data)->~Variant();
+	}
+
+	Variant *ptr() {
+		return (Variant *)data;
+	}
+};
+
 struct DefineStatement {
 	int index;
 	String name;

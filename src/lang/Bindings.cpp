@@ -1,5 +1,6 @@
 #include "Bindings.hpp"
 #include "PythonScriptInstance.hpp"
+#include "gdextension_interface.h"
 #include "pocketpy/pocketpy.h"
 
 #include "godot_cpp/core/class_db.hpp"
@@ -138,6 +139,24 @@ static void setup_exports() {
 	});
 }
 
+bool handle_gde_call_error(GDExtensionCallError error) {
+	switch (error.error) {
+		case GDEXTENSION_CALL_OK:
+			return true;
+		case GDEXTENSION_CALL_ERROR_INVALID_METHOD:
+			return RuntimeError("GDEXTENSION_CALL_ERROR_INVALID_METHOD");
+		case GDEXTENSION_CALL_ERROR_INVALID_ARGUMENT:
+			return ValueError("GDEXTENSION_CALL_ERROR_INVALID_ARGUMENT");
+		case GDEXTENSION_CALL_ERROR_TOO_MANY_ARGUMENTS:
+		case GDEXTENSION_CALL_ERROR_TOO_FEW_ARGUMENTS:
+			return TypeError("expected %d arguments, got %d", error.expected, error.argument);
+		case GDEXTENSION_CALL_ERROR_INSTANCE_IS_NULL:
+			return RuntimeError("GDEXTENSION_CALL_ERROR_INSTANCE_IS_NULL");
+		case GDEXTENSION_CALL_ERROR_METHOD_NOT_CONST:
+			return RuntimeError("GDEXTENSION_CALL_ERROR_METHOD_NOT_CONST");
+	}
+}
+
 void setup_python_bindings() {
 	pyctx()->main_thread_id = std::this_thread::get_id();
 	pyctx()->lock.clear();
@@ -198,17 +217,30 @@ void setup_python_bindings() {
 	py_tphookattributes(pyctx()->tp_GDNativeClass, GDNativeClass_getattribute, NULL, NULL);
 
 	py_bindmethod(pyctx()->tp_GDNativeClass, "__call__", [](int argc, py_Ref argv) -> bool {
-		PY_CHECK_ARGC(1);
 		PY_CHECK_ARG_TYPE(0, pyctx()->tp_GDNativeClass);
 		GDNativeClass *p = (GDNativeClass *)py_totrivial(argv);
-		if (!ClassDB::can_instantiate(p->name)) {
-			return RuntimeError("cannot instantiate class '%n'", godot_name_to_python(p->name));
+
+		if (p->type == Variant::OBJECT) {
+			PY_CHECK_ARGC(1);
+			if (!ClassDB::can_instantiate(p->name)) {
+				return TypeError("cannot instantiate class '%n'", godot_name_to_python(p->name));
+			}
+			Variant res = ClassDB::instantiate(p->name);
+			py_newvariant(py_retval(), &res);
+		} else {
+			Vector<Variant> arguments;
+			for (int i = 1; i < argc; i++) {
+				arguments.append(py_tovariant(py_arg(i)));
+			}
+
+			UninitializedVariant uninitialized_res;
+			GDExtensionCallError error;
+			internal::gdextension_interface_variant_construct((GDExtensionVariantType)p->type, uninitialized_res.ptr(), (const GDExtensionConstVariantPtr *)arguments.ptr(), arguments.size(), &error);
+			if (!handle_gde_call_error(error)) {
+				return false;
+			}
+			py_newvariant(py_retval(), uninitialized_res.ptr());
 		}
-		Variant res = ClassDB::instantiate(p->name);
-		if (!res) {
-			return RuntimeError("failed to instantiate class '%n'", godot_name_to_python(p->name));
-		}
-		py_newvariant(py_retval(), &res);
 		return true;
 	});
 
@@ -240,6 +272,7 @@ void setup_python_bindings() {
 		}
 		Callable callable(*self);
 		int64_t args_count = callable.get_argument_count();
+		// 0 maybe is_vararg
 		if (args_count >= 1 && args_count != argc - 1) {
 			return TypeError("expected %d arguments, got %d", args_count, argc - 1);
 		}

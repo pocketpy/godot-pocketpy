@@ -200,10 +200,11 @@ Error PythonScript::_reload(bool keep_state) {
 	for (DefineStatement *d : defines) {
 		if (d->is_signal()) {
 			SignalStatement *s = (SignalStatement *)d;
+			buffer.append("signal " + s->name + "(" + String(", ").join(s->arguments) + ")");
 			new_meta.signals[s->name] = s->arguments;
 		} else {
 			ExportStatement *e = (ExportStatement *)d;
-			buffer.push_back(e->template_.replace("?", e->name));
+			buffer.append(e->template_.replace("?", e->name));
 			new_meta.default_values[e->name] = e->default_value;
 		}
 	}
@@ -274,19 +275,7 @@ bool PythonScript::_has_script_signal(const StringName &p_signal) const {
 }
 
 TypedArray<Dictionary> PythonScript::_get_script_signal_list() const {
-	TypedArray<Dictionary> signals;
-	for (const auto &it : meta.signals) {
-		const PackedStringArray &arguments = it.value;
-		StringName name = it.key;
-		MethodInfo mi;
-		mi.name = name;
-		for (int i = 0; i < arguments.size(); i++) {
-			mi.arguments.push_back(PropertyInfo(Variant::Type::NIL, arguments[i]));
-		}
-		Dictionary signal_info(mi);
-		signals.push_back(signal_info);
-	}
-	return signals;
+	return meta.gds->get_script_signal_list();
 }
 
 bool PythonScript::_has_property_default_value(const StringName &p_property) const {
@@ -366,11 +355,14 @@ String PythonScript::_to_string() const {
 }
 
 static Variant construct_default_variant(Variant::Type type) {
-	Variant result;
+	UninitializedVariant uninitialized_res;
 	GDExtensionCallError error;
-	internal::gdextension_interface_variant_construct((GDExtensionVariantType)type, &result, nullptr, 0, &error);
-	ERR_FAIL_COND_V_MSG(error.error != GDEXTENSION_CALL_OK, Variant(), "Error constructing " + Variant::get_type_name(type));
-	return result;
+	internal::gdextension_interface_variant_construct((GDExtensionVariantType)type, uninitialized_res.ptr(), nullptr, 0, &error);
+	if (error.error != GDEXTENSION_CALL_OK) {
+		ERR_PRINT("construct_default_variant() failed: " + Variant::get_type_name(type));
+		return Variant();
+	}
+	return *uninitialized_res.ptr();
 }
 
 void PythonScript::_update_placeholder_exports(void *placeholder) const {
