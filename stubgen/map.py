@@ -18,6 +18,7 @@ class MapResult:
     enums_pyi: Writer
     init_pyi: Writer
     alias_pyi: Writer
+    header_pyi:Writer
     c_writer: Writer
 
 
@@ -102,6 +103,36 @@ def fill_converters(gdt_all_in_one: GodotInOne):
                         },
                     )
 
+def gen_header_pyi_writer(gdt_all_in_one: GodotInOne, pyi_writer: Writer) -> Writer:
+    pyi_writer.write(
+"""\
+from . import classes
+import typing
+
+
+class PythonScriptInstance[T: classes.Object]:
+    owner: T
+
+class GDNativeClass[T: classes.Object]:
+    @property
+    def script(self) -> PythonScriptInstance[T]: ...
+    def __new__(cls, *args) -> T: ...
+
+class GDBuiltinClass[T: classes.Variant]:
+    def __new__(cls, *args) -> T: ...
+
+def Extends[T: classes.Object](cls: type[GDNativeClass[T]]) -> type[PythonScriptInstance[T]]: ...
+
+def export[T](cls: type[T], default=None) -> T: ...
+def export_range[T: int | float](min: T, max: T, step: T, default: T | None = None) -> T: ...
+def signal(*args: str) -> classes.Signal: ...
+
+intptr = int
+
+def default(gdt_expr: str) -> typing.Any: ...
+"""
+    )
+    return pyi_writer
 
 def gen_c_writer(gdt_all_in_one: GodotInOne, c_writer: Writer) -> Writer:
     c_writer.write(
@@ -155,11 +186,9 @@ import typing
 from typing import overload
 from .enums import *
 from . import alias
+from .headers import *
 
 
-intptr = int
-
-def default(gdt_expr: str) -> typing.Any: ...
 
 """
     )
@@ -302,6 +331,49 @@ def default(gdt_expr: str) -> typing.Any: ...
             class_writer.write("")
             is_empty_class = False
 
+        # ------init
+        if isinstance(clazz, BuiltinClass):
+            if clazz.constructors:
+                for constructor in clazz.constructors:
+                    
+                    method = constructor
+                    
+                    # ------Arguments
+                    arg_expr = []
+                    arg_expr.append("self")
+                    
+                    for arg in method.arguments or []:
+                    
+                        arg_name = converters.convert_keyword_name(arg.name)
+                        arg_type = converters.convert_type_name(arg.type)
+                        arg_name += arg_type
+                        arg_type_is_alias = arg_type in list(
+                            converters.ALIAS_CLASS_DATA.loc[:, "cls_name"]
+                        )
+
+                        arg_default_value = None
+                    
+                        if arg_type_is_alias:
+                            alias_module_path = "alias"
+                            expr = f"{arg_name}: {alias_module_path}.{arg_type}"
+                        else:
+                            expr = f"{arg_name}: {arg_type}"
+                    
+                        arg_expr.append(expr)
+                    
+                    # ------Method
+                    if len(clazz.constructors) > 1:
+                        class_writer.write("@overload")
+                    method_name = "__init__"
+                    class_writer.writefmt(
+                        "def {0}({1}): ...",
+                        method_name,
+                        ", ".join(arg_expr)
+                    )
+                
+                is_empty_class = False
+        
+        
         # ------Class methods
         if clazz.methods:
             for method in clazz.methods:
@@ -360,6 +432,12 @@ def default(gdt_expr: str) -> typing.Any: ...
 
             class_writer.write("")
             is_empty_class = False
+        
+        if clazz.name == "Object":
+            class_writer.write("@property")
+            class_writer.write("def script(self) -> PythonScriptInstance: ...")
+            class_writer.write("")
+            is_empty_class = False
 
         if is_empty_class:
             class_writer.write("...")
@@ -416,22 +494,6 @@ def gen_init_pyi_writer(gdt_all_in_one: GodotInOne, pyi_writer: Writer) -> Write
 from . import classes
 from . import enums
 
-class PythonScriptInstance[T: classes.Object]:
-    owner: T
-
-class GDNativeClass[T: classes.Object]:
-    @property
-    def script(self) -> PythonScriptInstance[T]: ...
-    def __new__(cls, *args) -> T: ...
-
-class GDBuiltinClass[T: classes.Variant]:
-    def __new__(cls, *args) -> T: ...
-
-def Extends[T: classes.Object](cls: type[GDNativeClass[T]]) -> type[PythonScriptInstance[T]]: ...
-
-def export[T](cls: type[T], default=None) -> T: ...
-def export_range[T: int | float](min: T, max: T, step: T, default: T | None = None) -> T: ...
-def signal(*args: str) -> classes.Signal: ...
 
 """
     )
@@ -507,15 +569,24 @@ def map_gdt_to_py(gdt_all_in_one: GodotInOne) -> MapResult:
         init_pyi=Writer(),
         alias_pyi=Writer(),
         enums_pyi=Writer(),
+        header_pyi=Writer(),
         c_writer=Writer(),
     )
 
+    print("gen_c_writer")
     gen_c_writer(gdt_all_in_one, map_result.c_writer)  # 暂不依赖converters
-
+    gen_header_pyi_writer(gdt_all_in_one, map_result.header_pyi)
+    
+    print('fill_converters')
     fill_converters(gdt_all_in_one)
+    
+    print('gen_alias_pyi_writer')
     gen_alias_pyi_writer(gdt_all_in_one, map_result.alias_pyi)
+    print('gen_enums_pyi_writer')
     gen_enums_pyi_writer(gdt_all_in_one, map_result.enums_pyi)
+    print('gen_init_pyi_writer')
     gen_init_pyi_writer(gdt_all_in_one, map_result.init_pyi)
+    print('gen_typings_pyi_writer')
     gen_typings_pyi_writer(gdt_all_in_one, map_result.typings_pyi)
 
     return map_result
