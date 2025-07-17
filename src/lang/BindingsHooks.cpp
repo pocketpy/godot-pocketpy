@@ -52,6 +52,7 @@ bool Variant_getunboundmethod(py_Ref self, py_Name name) {
 					godot_args.push_back(py_tovariant(&argv[i]));
 				}
 				Variant res = curr_callable.callv(godot_args);
+                curr_callable = Callable();
 				py_newvariant(py_retval(), &res);
 				return true;
 			});
