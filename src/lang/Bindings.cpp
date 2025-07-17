@@ -48,10 +48,12 @@ static bool Variant_setattribute(py_Ref self, py_Name name, py_Ref value) {
 	return true;
 }
 
+static thread_local GDCurrentUnboundMethod curr_unbound_method;
+
 static void build_rich_nativefunc(py_Ref out, StringName clazz, py_Name method) {
-	pyctx()->curr_unbound_method.reset(clazz, method);
+	curr_unbound_method.reset(clazz, method);
 	py_newnativefunc(out, [](int argc, py_Ref argv) -> bool {
-		GDCurrentUnboundMethod *self = &pyctx()->curr_unbound_method;
+		GDCurrentUnboundMethod *self = &curr_unbound_method;
 		Variant instance = to_variant_exact(&argv[0]);
 		for (int i = 1; i < argc; i++) {
 			self->arguments.append(py_tovariant(&argv[i]));
@@ -78,6 +80,7 @@ static bool Variant_getunboundmethod(py_Ref self, py_Name name) {
 			return true;
 		}
 	} else {
+		return false;
 		StringName clazz = Variant::get_type_name(v.get_type());
 		if (ClassDB::class_has_method(clazz, name_sn)) {
 			build_rich_nativefunc(py_retval(), clazz, name);
@@ -271,6 +274,9 @@ void setup_python_bindings() {
 			py_newvariant(py_retval(), &res);
 		} else {
 			InternalArguments arguments;
+			for (int i = 1; i < argc; i++) {
+				arguments.append(py_tovariant(&argv[i]));
+			}
 			UninitializedVariant uninitialized_res;
 			GDExtensionCallError error;
 			internal::gdextension_interface_variant_construct((GDExtensionVariantType)p->type, uninitialized_res.ptr(), arguments.ptr(), arguments.size(), &error);

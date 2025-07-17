@@ -91,7 +91,6 @@ struct PythonContext {
 	py_GlobalRef godot;
 	py_Type tp_Script;
 	py_Type tp_GDNativeClass;
-	py_Type tp_GDUnboundMethod;
 	py_Type tp_Variant;
 	// internals
 	py_Type tp_DefineStatement;
@@ -102,7 +101,6 @@ struct PythonContext {
 		py_Name __init__;
 		py_Name script;
 	} names;
-	GDCurrentUnboundMethod curr_unbound_method;
 };
 
 struct GDNativeClass {
