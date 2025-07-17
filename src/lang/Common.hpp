@@ -1,5 +1,6 @@
 #pragma once
 
+#include "gdextension_interface.h"
 #include "pocketpy.h"
 
 #include <atomic>
@@ -13,6 +14,16 @@
 using namespace godot;
 
 namespace pkpy {
+
+inline py_Name godot_name_to_python(StringName name) {
+	const py_Name &retval = (const py_Name &)name;
+	return retval;
+}
+
+inline StringName python_name_to_godot(py_Name name) {
+	const StringName &sn = (const StringName &)name;
+	return sn;
+}
 
 struct PythonScriptReloadingContext {
 	StringName class_name;
@@ -33,10 +44,54 @@ struct PythonScriptReloadingContext {
 	}
 };
 
+struct InternalArguments {
+	Vector<Variant> _args;
+	Vector<GDExtensionConstVariantPtr> _pointers;
+
+	inline void reset() {
+		_args.clear();
+		_pointers.clear();
+	}
+
+	inline void append(const Variant &v) {
+		_args.push_back(v);
+	}
+
+	inline const GDExtensionConstVariantPtr *ptr() {
+		_pointers.resize(_args.size());
+		for (int i = 0; i < _args.size(); i++) {
+			_pointers.write[i] = &_args[i];
+		}
+		return _pointers.ptr();
+	}
+
+	inline int size() const {
+		return _args.size();
+	}
+};
+
+struct GDCurrentUnboundMethod {
+	py_Name clazz;
+	py_Name name;
+
+	InternalArguments arguments;
+
+	GDCurrentUnboundMethod() = default;
+	GDCurrentUnboundMethod(py_Name clazz, py_Name name) :
+			clazz(clazz), name(name) {}
+
+	inline void reset(StringName clazz, py_Name name) {
+		this->clazz = godot_name_to_python(clazz);
+		this->name = name;
+		arguments.reset();
+	}
+};
+
 struct PythonContext {
 	py_GlobalRef godot;
 	py_Type tp_Script;
 	py_Type tp_GDNativeClass;
+	py_Type tp_GDUnboundMethod;
 	py_Type tp_Variant;
 	// internals
 	py_Type tp_DefineStatement;
@@ -47,13 +102,14 @@ struct PythonContext {
 		py_Name __init__;
 		py_Name script;
 	} names;
+	GDCurrentUnboundMethod curr_unbound_method;
 };
 
 struct GDNativeClass {
 	Variant::Type type;
-	StringName name;
+	py_Name name;
 
-	GDNativeClass(Variant::Type type, StringName clazz) :
+	GDNativeClass(Variant::Type type, py_Name clazz) :
 			type(type), name(clazz) {}
 };
 
@@ -107,16 +163,6 @@ struct SignalStatement : DefineStatement {
 };
 
 PythonContext *pyctx();
-
-inline py_Name godot_name_to_python(StringName name) {
-	const py_Name &retval = (const py_Name &)name;
-	return retval;
-}
-
-inline StringName python_name_to_godot(py_Name name) {
-	const StringName &sn = (const StringName &)name;
-	return sn;
-}
 
 void log_python_error_and_clearexc(py_StackRef p0);
 

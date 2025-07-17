@@ -1,7 +1,6 @@
 #include "Bindings.hpp"
 #include "PythonScriptInstance.hpp"
 #include "gdextension_interface.h"
-#include "godot_cpp/variant/variant.hpp"
 #include "pocketpy/pocketpy.h"
 
 #include "godot_cpp/core/class_db.hpp"
@@ -19,8 +18,7 @@ static bool Variant_getattribute(py_Ref self, py_Name name) {
 	Variant v = to_variant_exact(self);
 	if (v.get_type() == Variant::OBJECT) {
 		Object *obj = v.operator Object *();
-		bool derived_from_Node = obj->is_class("Node");
-		if (derived_from_Node && name == pyctx()->names.script) {
+		if (name == pyctx()->names.script) {
 			PythonScriptInstance *inst = PythonScriptInstance::attached_to_object(obj);
 			if (inst != nullptr) {
 				py_assign(py_retval(), &inst->py);
@@ -50,9 +48,48 @@ static bool Variant_setattribute(py_Ref self, py_Name name, py_Ref value) {
 	return true;
 }
 
+static void build_rich_nativefunc(py_Ref out, StringName clazz, py_Name method) {
+	pyctx()->curr_unbound_method.reset(clazz, method);
+	py_newnativefunc(out, [](int argc, py_Ref argv) -> bool {
+		GDCurrentUnboundMethod *self = &pyctx()->curr_unbound_method;
+		Variant instance = to_variant_exact(&argv[0]);
+		for (int i = 1; i < argc; i++) {
+			self->arguments.append(py_tovariant(&argv[i]));
+		}
+		UninitializedVariant uninitialized_res;
+		GDExtensionCallError error;
+		StringName method_name = python_name_to_godot(self->name);
+		internal::gdextension_interface_variant_call(&instance, &method_name, self->arguments.ptr(), self->arguments.size(), uninitialized_res.ptr(), &error);
+		if (!handle_gde_call_error(error)) {
+			return false;
+		}
+		py_newvariant(py_retval(), uninitialized_res.ptr());
+		return true;
+	});
+}
+
+static bool Variant_getunboundmethod(py_Ref self, py_Name name) {
+	Variant v = to_variant_exact(self);
+	StringName name_sn = python_name_to_godot(name);
+	if (Object *obj = v.operator Object *()) {
+		StringName clazz = obj->get_class();
+		if (obj->has_method(name_sn)) {
+			build_rich_nativefunc(py_retval(), clazz, name);
+			return true;
+		}
+	} else {
+		StringName clazz = Variant::get_type_name(v.get_type());
+		if (ClassDB::class_has_method(clazz, name_sn)) {
+			build_rich_nativefunc(py_retval(), clazz, name);
+			return true;
+		}
+	}
+	return false;
+}
+
 static StringName to_GDNativeClass(py_Ref self) {
 	GDNativeClass *p = (GDNativeClass *)py_totrivial(self);
-	return p->name;
+	return python_name_to_godot(p->name);
 }
 
 static bool GDNativeClass_getattribute(py_Ref self, py_Name name) {
@@ -218,34 +255,25 @@ void setup_python_bindings() {
 	// GDNativeClass
 	pyctx()->tp_GDNativeClass = py_newtype("GDNativeClass", tp_object, godot, NULL);
 
-	py_tphookattributes(pyctx()->tp_GDNativeClass, GDNativeClass_getattribute, NULL, NULL);
+	py_tphookattributes(pyctx()->tp_GDNativeClass, GDNativeClass_getattribute, NULL, NULL, NULL);
 
 	py_bindmethod(pyctx()->tp_GDNativeClass, "__call__", [](int argc, py_Ref argv) -> bool {
 		PY_CHECK_ARG_TYPE(0, pyctx()->tp_GDNativeClass);
 		GDNativeClass *p = (GDNativeClass *)py_totrivial(argv);
+		StringName clazz = python_name_to_godot(p->name);
 
 		if (p->type == Variant::OBJECT) {
 			PY_CHECK_ARGC(1);
-			if (!ClassDB::can_instantiate(p->name)) {
-				return TypeError("cannot instantiate class '%n'", godot_name_to_python(p->name));
+			if (!ClassDB::can_instantiate(clazz)) {
+				return TypeError("cannot instantiate class '%n'", p->name);
 			}
-			Variant res = ClassDB::instantiate(p->name);
+			Variant res = ClassDB::instantiate(clazz);
 			py_newvariant(py_retval(), &res);
 		} else {
-			Vector<Variant> arguments;
-			arguments.resize(argc - 1);
-			for (int i = 1; i < argc; i++) {
-				arguments.write[i - 1] = py_tovariant(&argv[i]);
-			}
-			Vector<GDExtensionConstVariantPtr> arguments_ptr;
-			arguments_ptr.resize(arguments.size());
-			for (int i = 0; i < arguments.size(); i++) {
-				arguments_ptr.write[i] = &arguments[i];
-			}
-
+			InternalArguments arguments;
 			UninitializedVariant uninitialized_res;
 			GDExtensionCallError error;
-			internal::gdextension_interface_variant_construct((GDExtensionVariantType)p->type, uninitialized_res.ptr(), (const GDExtensionConstVariantPtr *)arguments_ptr.ptr(), (int)arguments_ptr.size(), &error);
+			internal::gdextension_interface_variant_construct((GDExtensionVariantType)p->type, uninitialized_res.ptr(), arguments.ptr(), arguments.size(), &error);
 			if (!handle_gde_call_error(error)) {
 				return false;
 			}
@@ -273,19 +301,15 @@ void setup_python_bindings() {
 		v->~Variant();
 	});
 
-	py_tphookattributes(type, Variant_getattribute, Variant_setattribute, NULL);
+	py_tpsetfinal(type);
+	py_tphookattributes(type, Variant_getattribute, Variant_setattribute, NULL, Variant_getunboundmethod);
 
 	py_bindmethod(type, "__call__", [](int argc, py_Ref argv) -> bool {
 		Variant self = to_variant_exact(&argv[0]);
 		if (self.get_type() != Variant::CALLABLE) {
-			return TypeError("Variant is not callable");
+			return TypeError("Variant type is not Variant::CALLABLE");
 		}
 		Callable callable(self);
-		int64_t args_count = callable.get_argument_count();
-		// 0 maybe is_vararg
-		if (args_count >= 1 && args_count != argc - 1) {
-			return TypeError("expected %d arguments, got %d", args_count, argc - 1);
-		}
 		Array godot_args;
 		for (int i = 1; i < argc; i++) {
 			godot_args.push_back(py_tovariant(&argv[i]));
@@ -410,7 +434,7 @@ void setup_python_bindings() {
 void register_GDNativeClass(Variant::Type type, const char *name) {
 	py_TValue tmp;
 	py_Name sn = py_name(name);
-	GDNativeClass clazz(type, python_name_to_godot(sn));
+	GDNativeClass clazz(type, sn);
 	py_newtrivial(&tmp, pyctx()->tp_GDNativeClass, &clazz, sizeof(GDNativeClass));
 	py_setdict(pyctx()->godot, sn, &tmp);
 }
