@@ -66,24 +66,7 @@ struct InternalArguments {
 	}
 
 	inline int size() const {
-		return _args.size();
-	}
-};
-
-struct GDCurrentUnboundMethod {
-	py_Name clazz;
-	py_Name name;
-
-	InternalArguments arguments;
-
-	GDCurrentUnboundMethod() = default;
-	GDCurrentUnboundMethod(py_Name clazz, py_Name name) :
-			clazz(clazz), name(name) {}
-
-	inline void reset(StringName clazz, py_Name name) {
-		this->clazz = godot_name_to_python(clazz);
-		this->name = name;
-		arguments.reset();
+		return (int)_args.size();
 	}
 };
 

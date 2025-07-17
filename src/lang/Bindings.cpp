@@ -48,42 +48,24 @@ static bool Variant_setattribute(py_Ref self, py_Name name, py_Ref value) {
 	return true;
 }
 
-static thread_local GDCurrentUnboundMethod curr_unbound_method;
-
-static void build_rich_nativefunc(py_Ref out, StringName clazz, py_Name method) {
-	curr_unbound_method.reset(clazz, method);
-	py_newnativefunc(out, [](int argc, py_Ref argv) -> bool {
-		GDCurrentUnboundMethod *self = &curr_unbound_method;
-		Variant instance = to_variant_exact(&argv[0]);
-		for (int i = 1; i < argc; i++) {
-			self->arguments.append(py_tovariant(&argv[i]));
-		}
-		UninitializedVariant uninitialized_res;
-		GDExtensionCallError error;
-		StringName method_name = python_name_to_godot(self->name);
-		internal::gdextension_interface_variant_call(&instance, &method_name, self->arguments.ptr(), self->arguments.size(), uninitialized_res.ptr(), &error);
-		if (!handle_gde_call_error(error)) {
-			return false;
-		}
-		py_newvariant(py_retval(), uninitialized_res.ptr());
-		return true;
-	});
-}
-
 static bool Variant_getunboundmethod(py_Ref self, py_Name name) {
+	static thread_local Callable curr_callable;
 	Variant v = to_variant_exact(self);
 	StringName name_sn = python_name_to_godot(name);
-	if (Object *obj = v.operator Object *()) {
-		StringName clazz = obj->get_class();
-		if (obj->has_method(name_sn)) {
-			build_rich_nativefunc(py_retval(), clazz, name);
-			return true;
-		}
-	} else {
-		return false;
-		StringName clazz = Variant::get_type_name(v.get_type());
-		if (ClassDB::class_has_method(clazz, name_sn)) {
-			build_rich_nativefunc(py_retval(), clazz, name);
+	bool r_valid;
+	Variant res = v.get_named(python_name_to_godot(name), r_valid);
+	if (r_valid) {
+		if (res.get_type() == Variant::CALLABLE) {
+			curr_callable = res.operator Callable();
+			py_newnativefunc(py_retval(), [](int argc, py_Ref argv) -> bool {
+				Array godot_args;
+				for (int i = 1; i < argc; i++) {
+					godot_args.push_back(py_tovariant(&argv[i]));
+				}
+				Variant res = curr_callable.callv(godot_args);
+				py_newvariant(py_retval(), &res);
+				return true;
+			});
 			return true;
 		}
 	}
@@ -245,15 +227,6 @@ void setup_python_bindings() {
 		auto *self = (PythonScriptInstance *)ud;
 		self->~PythonScriptInstance();
 	});
-
-	py_bindproperty(
-			pyctx()->tp_Script, "owner", [](int argc, py_Ref argv) -> bool {
-				auto *self = (PythonScriptInstance *)py_touserdata(&argv[0]);
-				Variant owner(self->owner);
-				py_newvariant(py_retval(), &owner);
-				return true;
-			},
-			NULL);
 
 	// GDNativeClass
 	pyctx()->tp_GDNativeClass = py_newtype("GDNativeClass", tp_object, godot, NULL);

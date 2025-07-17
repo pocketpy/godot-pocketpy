@@ -67,6 +67,9 @@ void *PythonScript::_instance_create(Object *for_object) const {
 	PythonScriptInstance *ud = (PythonScriptInstance *)py_newobject(py_retval(), meta.type, -1, sizeof(PythonScriptInstance));
 	new (ud) PythonScriptInstance(for_object, Ref<PythonScript>(this));
 	py_assign(&ud->py, py_retval());
+	// assign owner
+	Variant owner = for_object;
+	py_newvariant(py_emplacedict(&ud->py, py_name("owner")), &owner);
 	// assign default values
 	for (const auto &it : meta.default_values) {
 		py_Name name = godot_name_to_python(it.key);
