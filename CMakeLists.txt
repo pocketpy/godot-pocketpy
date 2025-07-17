@@ -16,9 +16,12 @@ set(LIBNAME "godot-pocketpy" CACHE STRING "The name of the library")
 set(GODOT_PROJECT_DIR "demo" CACHE STRING "The directory of a Godot project folder")
 
 set(GODOTCPP_USE_STATIC_CPP OFF CACHE BOOL "")
-set(GODOTCPP_DEBUG_CRT ON CACHE BOOL "")
 
-find_package(Python3 3.4 REQUIRED)
+if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+    set(GODOTCPP_DEBUG_CRT ON CACHE BOOL "")
+endif()
+
+find_package(Python3 3.10 REQUIRED)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)

@@ -1,0 +1,8 @@
+{
+    "pythonVersion": "3.12",
+    "stubPath": "demo/addons/godot-pocketpy/typings",
+    "reportMissingModuleSource": "none",
+    "include": [
+        "site-packages",
+    ]
+}
