@@ -27,5 +27,8 @@ elif platform == 'ios':
     extra_flags.append('-DDEPLOYMENT_TARGET=13.0')
     extra_flags.append('-DPLATFORM=OS64')
 
+if config == 'Release':
+    extra_flags.append('-DGODOTCPP_TARGET=template_release')
+
 run(f"cmake -B build -DCMAKE_BUILD_TYPE={config} {' '.join(extra_flags)}")
 run(f"cmake --build build --config {config}")
