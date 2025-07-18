@@ -1,14 +1,14 @@
 # Using the same minimum as the godot-cpp project
 cmake_minimum_required(VERSION 3.17)
 
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+
 # Build pocketpy
 option(PK_ENABLE_CUSTOM_SNAME "" ON)
 option(PK_BUILD_STATIC_LIB "" ON)
 add_subdirectory(pocketpy)
 
 ##############################################
-set(CMAKE_POSITION_INDEPENDENT_CODE ON)
-
 # Silence unused variable warning when specified from toolchain
 if(CMAKE_C_COMPILER)
 endif()
