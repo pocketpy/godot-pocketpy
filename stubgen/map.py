@@ -313,11 +313,11 @@ def default(gdt_expr: str) -> typing.Any: ...
                         alias_module_path = "alias"
                         if right_type_is_alias:
                             class_writer.write(
-                                f"def {operator_name}(self, right_{right_type}: {alias_module_path}.{right_type}) -> {return_type}: ..."
+                                f"def {operator_name}(self, right: {alias_module_path}.{right_type}) -> {return_type}: ..."
                             )
                         else:
                             class_writer.write(
-                                f"def {operator_name}(self, right_{right_type}: {right_type}) -> {return_type}: ..."
+                                f"def {operator_name}(self, right: {right_type}) -> {return_type}: ..."
                             )
                     else:
                         class_writer.write(
@@ -325,50 +325,7 @@ def default(gdt_expr: str) -> typing.Any: ...
                         )
 
             class_writer.write("")
-            is_empty_class = False
-
-        # ------init
-        if isinstance(clazz, BuiltinClass):
-            if clazz.constructors:
-                for constructor in clazz.constructors:
-                    
-                    method = constructor
-                    
-                    # ------Arguments
-                    arg_expr = []
-                    arg_expr.append("self")
-                    
-                    for arg in method.arguments or []:
-                    
-                        arg_name = converters.convert_keyword_name(arg.name)
-                        arg_type = converters.convert_type_name(arg.type)
-                        arg_name += arg_type
-                        arg_type_is_alias = arg_type in list(
-                            converters.ALIAS_CLASS_DATA.loc[:, "cls_name"]
-                        )
-
-                        arg_default_value = None
-                    
-                        if arg_type_is_alias:
-                            alias_module_path = "alias"
-                            expr = f"{arg_name}: {alias_module_path}.{arg_type}"
-                        else:
-                            expr = f"{arg_name}: {arg_type}"
-                    
-                        arg_expr.append(expr)
-                    
-                    # ------Method
-                    if len(clazz.constructors) > 1:
-                        class_writer.write("@overload")
-                    method_name = "__init__"
-                    class_writer.writefmt(
-                        "def {0}({1}): ...",
-                        method_name,
-                        ", ".join(arg_expr)
-                    )
-                
-                is_empty_class = False
-        
+            is_empty_class = False        
         
         # ------Class methods
         if clazz.methods:
@@ -487,16 +444,16 @@ from . import classes
 def gen_init_pyi_writer(gdt_all_in_one: GodotInOne, pyi_writer: Writer) -> Writer:
     pyi_writer.write(
         """\
-from . import classes
-
+from typing import overload
+from . import classes, alias
+from .classes import Variant
 from .enums import *
 from .header import *
-
 
 """
     )
 
-    init_writer = pyi_writer
+    writer = pyi_writer
     for clazz in gdt_all_in_one.builtin_classes + gdt_all_in_one.classes:
         cls_name = converters.convert_class_name(clazz.name)
         cls_type_name = converters.convert_class_name(clazz.name).split("[")[
@@ -520,9 +477,59 @@ from .header import *
             inherit_2 = None
 
         if inherit_2:
-            init_writer.write(f"class {cls_name}({inherit_1}, {inherit_2}): ...")
+            writer.write(f"class {cls_name}({inherit_1}, {inherit_2}):")
         else:
-            init_writer.write(f"class {cls_name}({inherit_1}): ...")
+            writer.write(f"class {cls_name}({inherit_1}):")
+
+        is_empty_class = True
+        writer.indent()
+
+        # ------init
+        if isinstance(clazz, BuiltinClass):
+            if clazz.constructors:
+                for constructor in clazz.constructors:
+                    
+                    method = constructor
+                    
+                    # ------Arguments
+                    arg_expr = []
+                    arg_expr.append("self")
+                    
+                    for arg in method.arguments or []:
+                    
+                        arg_name = converters.convert_keyword_name(arg.name)
+                        arg_type = converters.convert_type_name(arg.type)
+                        # arg_name += arg_type
+                        arg_type_is_alias = arg_type in list(
+                            converters.ALIAS_CLASS_DATA.loc[:, "cls_name"]
+                        )
+
+                        arg_default_value = None
+                    
+                        if arg_type_is_alias:
+                            alias_module_path = "alias"
+                            expr = f"{arg_name}: {alias_module_path}.{arg_type}"
+                        else:
+                            expr = f"{arg_name}: {arg_type}"
+                    
+                        arg_expr.append(expr)
+                    
+                    # ------Method
+                    if len(clazz.constructors) > 1:
+                        writer.write("@overload")
+                    method_name = "__init__"
+                    writer.writefmt(
+                        "def {0}({1}): ...",
+                        method_name,
+                        ", ".join(arg_expr)
+                    )
+                    is_empty_class = False
+
+        if is_empty_class:
+            writer.write("...")
+
+        writer.dedent()
+        writer.write('\n')
 
     return pyi_writer
 
