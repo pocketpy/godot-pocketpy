@@ -16,9 +16,6 @@ platform: str = args.platform
 
 extra_flags = []
 
-if not os.path.exists('build'):
-    os.mkdir('build')
-
 if platform == 'android':
     extra_flags.append('-DCMAKE_TOOLCHAIN_FILE=$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake')
     extra_flags.append('-DANDROID_PLATFORM=android-22')
@@ -27,7 +24,6 @@ elif platform == 'ios':
     extra_flags.append('-DCMAKE_TOOLCHAIN_FILE=pocketpy/3rd/ios.toolchain.cmake')
     extra_flags.append('-DDEPLOYMENT_TARGET=13.0')
     extra_flags.append('-DPLATFORM=OS64')
-else:
-    run(f"cmake -B build -DCMAKE_BUILD_TYPE={config}")
 
+run(f"cmake -B build -DCMAKE_BUILD_TYPE={config} {' '.join(extra_flags)}")
 run(f"cmake --build build --config {config}")
