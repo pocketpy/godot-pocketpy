@@ -21,7 +21,9 @@ if platform == 'android':
     extra_flags.append('-DANDROID_PLATFORM=android-22')
     extra_flags.append('-DANDROID_ABI=arm64-v8a')
 elif platform == 'ios':
-    extra_flags.append('-DCMAKE_TOOLCHAIN_FILE=./pocketpy/3rd/ios.toolchain.cmake')
+    toolchain_file = 'pocketpy/3rd/ios.toolchain.cmake'
+    toolchain_file = os.path.abspath(toolchain_file)
+    extra_flags.append('-DCMAKE_TOOLCHAIN_FILE=' + toolchain_file)
     extra_flags.append('-DDEPLOYMENT_TARGET=13.0')
     extra_flags.append('-DPLATFORM=OS64')
 
