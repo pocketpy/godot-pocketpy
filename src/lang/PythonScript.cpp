@@ -125,19 +125,22 @@ void PythonScript::_set_source_code(const String &code) {
 Error PythonScript::_reload(bool keep_state) {
 	(void)keep_state;
 
-	PythonContextLock lock;
 	std::thread::id tid = std::this_thread::get_id();
-	if (tid != pyctx()->main_thread_id) {
-		py_switchvm(0);
-	}
 
-	placeholder_fallback_enabled = true;
 	printf(
 			"=> PythonScript.reload(): %s, %p, tid=%lld\n",
 			get_path().utf8().get_data(),
 			this,
 			(long long)std::hash<std::thread::id>()(tid));
 
+	// PythonContextLock lock;
+	if (tid != pyctx()->main_thread_id) {
+		// py_switchvm(0);
+		ERR_PRINT("PythonScript.reload() must be called from the main thread!");
+		return ERR_UNAVAILABLE;
+	}
+
+	placeholder_fallback_enabled = true;
 	meta.is_valid = false;
 	PythonScriptMeta new_meta;
 	auto ctx = &pyctx()->reloading_context;
