@@ -126,40 +126,42 @@ jobs:
         run: |
           python -m pip install pandas
           python -m stubgen
-          mkdir -p $GITHUB_WORKSPACE/demo/addons/godot-pocketpy/bin
+          mkdir -p demo/addons/godot-pocketpy/bin
+          # remove .gitignore
+          rm -f .gitignore
         
       - name: "Merge win32"
         uses: actions/download-artifact@v4.1.7
         with:
           name: windows
-          path: $GITHUB_WORKSPACE/demo/addons/godot-pocketpy/bin/windows
+          path: demo/addons/godot-pocketpy/bin/windows
 
       - name: "Merge linux"
         uses: actions/download-artifact@v4.1.7
         with:
           name: linux
-          path: $GITHUB_WORKSPACE/demo/addons/godot-pocketpy/bin/linux
+          path: demo/addons/godot-pocketpy/bin/linux
 
       - name: "Merge macos"
         uses: actions/download-artifact@v4.1.7
         with:
           name: macos
-          path: $GITHUB_WORKSPACE/demo/addons/godot-pocketpy/bin/macos
+          path: demo/addons/godot-pocketpy/bin/macos
 
       - name: "Merge android"
         uses: actions/download-artifact@v4.1.7
         with:
           name: android
-          path: $GITHUB_WORKSPACE/demo/addons/godot-pocketpy/bin/android
+          path: demo/addons/godot-pocketpy/bin/android
           
       - name: "Merge ios"
         uses: actions/download-artifact@v4.1.7
         with:
           name: ios
-          path: $GITHUB_WORKSPACE/demo/addons/godot-pocketpy/bin/ios
+          path: demo/addons/godot-pocketpy/bin/ios
 
       - name: "Upload merged artifact"
         uses: actions/upload-artifact@v4.3.3
         with:
           name: godot-pocketpy
-          path: $GITHUB_WORKSPACE/demo/addons/godot-pocketpy
+          path: demo/addons/godot-pocketpy
