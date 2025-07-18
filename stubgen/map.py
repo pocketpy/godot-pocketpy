@@ -126,10 +126,6 @@ def Extends[T: classes.Object](cls: type[GDNativeClass[T]]) -> type[PythonScript
 def export[T](cls: type[T], default=None) -> T: ...
 def export_range[T: int | float](min: T, max: T, step: T, default: T | None = None) -> T: ...
 def signal(*args: str) -> classes.Signal: ...
-
-intptr = int
-
-def default(gdt_expr: str) -> typing.Any: ...
 """
     )
     return pyi_writer
@@ -186,9 +182,9 @@ import typing
 from typing import overload
 from .enums import *
 from . import alias
-from .headers import *
 
-
+intptr = int
+def default(gdt_expr: str) -> typing.Any: ...
 
 """
     )
@@ -435,7 +431,7 @@ from .headers import *
         
         if clazz.name == "Object":
             class_writer.write("@property")
-            class_writer.write("def script(self) -> PythonScriptInstance: ...")
+            class_writer.write("def script(self): ...")
             class_writer.write("")
             is_empty_class = False
 
@@ -492,7 +488,9 @@ def gen_init_pyi_writer(gdt_all_in_one: GodotInOne, pyi_writer: Writer) -> Write
     pyi_writer.write(
         """\
 from . import classes
-from . import enums
+
+from .enums import *
+from .header import *
 
 
 """
@@ -517,7 +515,7 @@ from . import enums
             inherit_1 = f"GDNativeClass[classes.{cls_type_name}]"
 
         if cls_enum:
-            inherit_2 = f"enums.{cls_enum}"
+            inherit_2 = f"{cls_enum}"
         else:
             inherit_2 = None
 
