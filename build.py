@@ -16,6 +16,9 @@ platform: str = args.platform
 
 extra_flags = []
 
+if not os.path.exists('build'):
+    os.mkdir('build')
+
 if platform == 'android':
     extra_flags.append('-DCMAKE_TOOLCHAIN_FILE=$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake')
     extra_flags.append('-DANDROID_PLATFORM=android-22')
