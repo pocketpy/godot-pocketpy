@@ -7,6 +7,7 @@ option(PK_BUILD_STATIC_LIB "" ON)
 add_subdirectory(pocketpy)
 
 ##############################################
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 # Silence unused variable warning when specified from toolchain
 if(CMAKE_C_COMPILER)
