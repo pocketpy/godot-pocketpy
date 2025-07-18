@@ -100,7 +100,6 @@ void *PythonScript::_instance_create(Object *for_object) const {
 }
 
 void *PythonScript::_placeholder_instance_create(Object *for_object) const {
-	if(!_is_valid()) return NULL;
 	void *placeholder = godot::internal::gdextension_interface_placeholder_script_instance_create(PythonScriptLanguage::get_singleton()->_owner, this->_owner, for_object->_owner);
 	placeholders.get(this).insert(placeholder);
 	_update_placeholder_exports(placeholder);
@@ -243,7 +242,8 @@ String PythonScript::_get_class_icon_path() const {
 }
 
 bool PythonScript::_has_method(const StringName &p_method) const {
-	if(!_is_valid()) return false;
+	if (!_is_valid())
+		return false;
 	return meta.methods.has(p_method);
 }
 
@@ -260,7 +260,8 @@ Dictionary PythonScript::_get_method_info(const StringName &p_method) const {
 }
 
 bool PythonScript::_is_tool() const {
-	if(!_is_valid()) return false;
+	if (!_is_valid())
+		return false;
 	return meta.gds->is_tool();
 }
 
@@ -277,12 +278,14 @@ ScriptLanguage *PythonScript::_get_language() const {
 }
 
 bool PythonScript::_has_script_signal(const StringName &p_signal) const {
-	if(!_is_valid()) return false;
+	if (!_is_valid())
+		return false;
 	return meta.signals.has(p_signal);
 }
 
 TypedArray<Dictionary> PythonScript::_get_script_signal_list() const {
-	if(!_is_valid()) return {};
+	if (!_is_valid())
+		return {};
 	return meta.gds->get_script_signal_list();
 }
 
@@ -291,7 +294,8 @@ bool PythonScript::_has_property_default_value(const StringName &p_property) con
 }
 
 Variant PythonScript::_get_property_default_value(const StringName &p_property) const {
-	if(!_is_valid()) return Variant();
+	if (!_is_valid())
+		return Variant();
 	auto it = meta.default_values.find(p_property);
 	if (it != meta.default_values.end()) {
 		return it->value;
@@ -311,7 +315,8 @@ TypedArray<Dictionary> PythonScript::_get_script_method_list() const {
 }
 
 TypedArray<Dictionary> PythonScript::_get_script_property_list() const {
-	if(!_is_valid()) return {};
+	if (!_is_valid())
+		return {};
 	auto retval = meta.gds->get_script_property_list();
 	// category
 	if (!retval.is_empty() && retval[0].get("usage") == Variant(PROPERTY_USAGE_CATEGORY)) {
@@ -376,6 +381,9 @@ static Variant construct_default_variant(Variant::Type type) {
 }
 
 void PythonScript::_update_placeholder_exports(void *placeholder) const {
+	if (!_is_valid()) {
+		return;
+	}
 	Array properties;
 	Dictionary default_values;
 	TypedArray<Dictionary> raw_properties = _get_script_property_list();

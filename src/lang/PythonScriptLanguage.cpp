@@ -82,11 +82,28 @@ Ref<Script> PythonScriptLanguage::_make_template(const String &_template, const 
 }
 
 TypedArray<Dictionary> PythonScriptLanguage::_get_built_in_templates(const StringName &p_object) const {
-	return {};
+	Dictionary node_template;
+	node_template["inherit"] = "Node";
+	node_template["id"] = 0;
+	node_template["name"] = "default";
+	node_template["description"] = "Node script template";
+	node_template["origin"] = 0;
+	node_template["content"] =
+R"(from godot import Extends, _BASE_CLASS_
+
+class _CLASS_(Extends(_BASE_CLASS_)):
+	def _ready(self):
+		pass
+
+	def _process(self, delta):
+		pass
+)";
+
+	return Array::make(node_template);
 }
 
 bool PythonScriptLanguage::_is_using_templates() {
-	return false;
+	return true;
 }
 
 Dictionary PythonScriptLanguage::_validate(const String &script, const String &path, bool validate_functions, bool validate_errors, bool validate_warnings, bool validate_safe_lines) const {
