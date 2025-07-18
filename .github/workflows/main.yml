@@ -50,7 +50,7 @@ jobs:
       with:
         name: linux
         path: demo/addons/godot-pocketpy/bin/linux
-  build_darwin:
+  build_macos:
       runs-on: macos-latest
       steps:
       - uses: actions/checkout@v4
@@ -93,7 +93,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: android
-          path: output
+          path: demo/addons/godot-pocketpy/bin/android
   build_ios:
       runs-on: macos-latest
       steps:
@@ -111,10 +111,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: ios
-          path: output
+          path: demo/addons/godot-pocketpy/bin/ios
   merge:
       runs-on: ubuntu-latest
-      needs: [ build_win32, build_linux, build_darwin, build_android, build_ios ]
+      needs: [ build_win32, build_linux, build_macos, build_android, build_ios ]
       steps:
       - name: "Create output directory"
         run: "mkdir $GITHUB_WORKSPACE/output"
@@ -131,7 +131,7 @@ jobs:
           name: linux
           path: $GITHUB_WORKSPACE/output/linux
 
-      - name: "Merge darwin"
+      - name: "Merge macos"
         uses: actions/download-artifact@v4.1.7
         with:
           name: macos
