@@ -1,4 +1,5 @@
 #include "pocketpy/common/name.h"
+#include <cstdio>
 #include <string.h>
 #include <atomic>
 #include <map>
