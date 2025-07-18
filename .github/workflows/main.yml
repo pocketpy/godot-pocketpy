@@ -122,50 +122,41 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.10'
-      - name: "Create output directory"
+      - name: "Run stubgen"
         run: |
-          mkdir $GITHUB_WORKSPACE/output
           python -m pip install pandas
           python -m stubgen
+          mkdir -p $GITHUB_WORKSPACE/demo/addons/godot-pocketpy/bin
         
       - name: "Merge win32"
         uses: actions/download-artifact@v4.1.7
         with:
           name: windows
-          path: $GITHUB_WORKSPACE/output/windows
+          path: $GITHUB_WORKSPACE/demo/addons/godot-pocketpy/bin/windows
 
       - name: "Merge linux"
         uses: actions/download-artifact@v4.1.7
         with:
           name: linux
-          path: $GITHUB_WORKSPACE/output/linux
+          path: $GITHUB_WORKSPACE/demo/addons/godot-pocketpy/bin/linux
 
       - name: "Merge macos"
         uses: actions/download-artifact@v4.1.7
         with:
           name: macos
-          path: $GITHUB_WORKSPACE/output/macos
+          path: $GITHUB_WORKSPACE/demo/addons/godot-pocketpy/bin/macos
 
       - name: "Merge android"
         uses: actions/download-artifact@v4.1.7
         with:
           name: android
-          path: $GITHUB_WORKSPACE/output/android
+          path: $GITHUB_WORKSPACE/demo/addons/godot-pocketpy/bin/android
           
       - name: "Merge ios"
         uses: actions/download-artifact@v4.1.7
         with:
           name: ios
-          path: $GITHUB_WORKSPACE/output/ios
-
-      - name: "Create output directory"
-        run: |
-          mkdir $GITHUB_WORKSPACE/output
-
-      - name: "Decompress all"
-        run: |
-          export BIN_ROOT=$GITHUB_WORKSPACE/demo/addons/godot-pocketpy/bin
-          mv $GITHUB_WORKSPACE/output $BIN_ROOT
+          path: $GITHUB_WORKSPACE/demo/addons/godot-pocketpy/bin/ios
 
       - name: "Upload merged artifact"
         uses: actions/upload-artifact@v4.3.3
