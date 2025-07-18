@@ -20,11 +20,8 @@ String PythonScriptLanguage::_get_name() const {
 }
 
 void PythonScriptLanguage::_init() {
-	py_initialize();
-
 	ProjectSettings *project_settings = ProjectSettings::get_singleton();
 	// add_project_setting(project_settings, LUA_PATH_SETTING, "res://?.lua;res://?/init.lua");
-
 	setup_python_bindings();
 }
 

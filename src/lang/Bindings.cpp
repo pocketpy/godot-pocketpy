@@ -311,6 +311,7 @@ void setup_python_bindings() {
 #undef DEF_UNARY_OP
 
 	setup_bindings_generated();
+	printf("==> setup_python_bindings() done!\n");
 }
 
 } //namespace pkpy

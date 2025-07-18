@@ -25,9 +25,9 @@ static void initialize(ModuleInitializationLevel p_level) {
 
 	ClassDB::register_abstract_class<PythonScript>();
 	ClassDB::register_abstract_class<PythonScriptLanguage>();
+	PythonScriptLanguage::get_or_create_singleton();
 	ClassDB::register_class<PythonScriptResourceFormatLoader>();
 	ClassDB::register_class<PythonScriptResourceFormatSaver>();
-	PythonScriptLanguage::get_or_create_singleton();
 	PythonScriptResourceFormatLoader::register_in_godot();
 	PythonScriptResourceFormatSaver::register_in_godot();
 }
