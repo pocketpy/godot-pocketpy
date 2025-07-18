@@ -85,7 +85,7 @@ TypedArray<Dictionary> PythonScriptLanguage::_get_built_in_templates(const Strin
 	Dictionary node_template;
 	node_template["inherit"] = "Node";
 	node_template["id"] = 0;
-	node_template["name"] = "default";
+	node_template["name"] = "Default";
 	node_template["description"] = "Node script template";
 	node_template["origin"] = 0;
 	node_template["content"] =
