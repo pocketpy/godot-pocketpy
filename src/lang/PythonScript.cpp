@@ -132,7 +132,11 @@ Error PythonScript::_reload(bool keep_state) {
 	}
 
 	placeholder_fallback_enabled = true;
-	printf("=> PythonScript: %p reload from %s\n", this, get_path().utf8().get_data());
+	printf(
+			"=> PythonScript.reload(): %s, %p, tid=%lld\n",
+			get_path().utf8().get_data(),
+			this,
+			(long long)std::hash<std::thread::id>()(tid));
 
 	meta.is_valid = false;
 	PythonScriptMeta new_meta;
@@ -144,8 +148,6 @@ Error PythonScript::_reload(bool keep_state) {
 		return OK;
 	}
 	auto path_cstr = get_path().utf8();
-
-	printf("==> reloading python script: %s\n", path_cstr.get_data());
 	String module_path = "godot.scripts." + basename;
 	auto module_path_cstr = module_path.utf8();
 

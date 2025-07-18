@@ -285,6 +285,7 @@ bool PythonScriptLanguage::_handles_global_class_type(const String &type) const 
 }
 
 Dictionary PythonScriptLanguage::_get_global_class_name(const String &path) const {
+	return {};
 	Ref<PythonScript> script = ResourceLoader::get_singleton()->load(path);
 
 	Dictionary result;
