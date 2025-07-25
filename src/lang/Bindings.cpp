@@ -7,6 +7,7 @@
 #include <godot_cpp/classes/engine.hpp>
 #include <godot_cpp/classes/file_access.hpp>
 #include <godot_cpp/classes/node.hpp>
+#include <godot_cpp/classes/resource_loader.hpp>
 #include <godot_cpp/core/defs.hpp>
 #include <godot_cpp/variant/callable.hpp>
 
@@ -124,6 +125,20 @@ void setup_python_bindings() {
 	};
 
 	py_GlobalRef godot = pyctx()->godot = py_newmodule("godot");
+
+	// load()
+	py_bindfunc(godot, "load", [](int argc, py_Ref argv) -> bool {
+		PY_CHECK_ARGC(1);
+		PY_CHECK_ARG_TYPE(0, tp_str);
+		String path = String::utf8(py_tostr(&argv[0]));
+		Ref<Resource> res = ResourceLoader::get_singleton()->load(path);
+		if (!res.is_valid()) {
+			return RuntimeError("failed to load resource '%s'", path.utf8().get_data());
+		}
+		Variant var(res);
+		py_newvariant(py_retval(), &var);
+		return true;
+	});
 
 	// Script
 	pyctx()->tp_Script = py_newtype("PythonScriptInstance", tp_object, godot, [](void *ud) {

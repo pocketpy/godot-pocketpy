@@ -450,15 +450,34 @@ from .classes import Variant
 from .enums import *
 from .header import *
 
+
+def load(path: str): ...
 """
     )
 
     writer = pyi_writer
+
+    singleton_names = set()
+    blacklist_names = {
+        'Nil', 'Bool', 'Int', 'Float', 'String'
+    }
+
+    for clazz in gdt_all_in_one.singletons:
+        writer.writefmt('{}: classes.{}', clazz.name, clazz.type)
+        singleton_names.add(clazz.name)
+    writer.write('')
+
     for clazz in gdt_all_in_one.builtin_classes + gdt_all_in_one.classes:
         cls_name = converters.convert_class_name(clazz.name)
         cls_type_name = converters.convert_class_name(clazz.name).split("[")[
             0
         ]  # 忽略模板参数
+
+        if cls_name in singleton_names:
+            continue
+        if cls_name in blacklist_names:
+            continue
+
         records = converters.find_records(
             converters.CLASS_ENUM_DATA, {"cls_name": cls_name}
         )
