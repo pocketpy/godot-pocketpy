@@ -5,10 +5,12 @@ on:
     paths-ignore:
       - 'docs/**'
       - '**.md'
+      - '**.json'
   pull_request:
     paths-ignore:
-      - '**.md'
       - 'docs/**'
+      - '**.md'
+      - '**.json'
 
 jobs:
   build_win32:

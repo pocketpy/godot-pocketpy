@@ -2,6 +2,7 @@
     "pythonVersion": "3.12",
     "stubPath": "addons/godot-pocketpy/typings",
     "reportMissingModuleSource": "none",
+    "reportOverlappingOverload": "none",
     "extraPaths": [
         "site-packages",
     ]
