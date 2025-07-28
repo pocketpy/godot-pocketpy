@@ -496,7 +496,6 @@ from .header import *
 from . import classes
 
 def load(path: str) -> classes.Resource: ...
-def isinstance(obj, type_obj) -> bool: ...
 """
     )
 
