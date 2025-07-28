@@ -85,6 +85,7 @@ struct PythonContext {
 	struct {
 		py_Name __init__;
 		py_Name __name__;
+		py_Name __call__;
 		py_Name script;
 	} names;
 };

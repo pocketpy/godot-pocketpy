@@ -1,5 +1,5 @@
 from godot import *
-from godot.classes import Node, TileSet, Vector2
+from godot.classes import Node, TileSet, Vector2, Vector3, Color, PhysicsRayQueryParameters3D
 
 import test
 
@@ -22,6 +22,9 @@ class MyScript(Extends(Node)):
 		print('==>', self.owner, self.owner.script)
 		print('==>', self.x, self.y, self.z, self.w)
 		print('==> path:', self.owner.get_path())
+		# test @staticmethod
+		print('==> color:', Color.from_hsv(0.307, 0.4589, 0.8118, 0.5))
+		print('==> ray3d:', PhysicsRayQueryParameters3D.create(Vector3(1, 2, 3), Vector3(1, 2, 3)))
 		print('==> vector2:', Vector2(1.5, 2.5))
 		print('==> vector2:', Vector2(1.5, 2.5).angle())
 

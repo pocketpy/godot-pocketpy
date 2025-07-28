@@ -92,6 +92,7 @@ void setup_python_bindings() {
 	pyctx()->lock.clear();
 	pyctx()->names.__init__ = py_name("__init__");
 	pyctx()->names.__name__ = py_name("__name__");
+	pyctx()->names.__call__ = py_name("__call__");
 	pyctx()->names.script = py_name("script");
 
 	py_callbacks()->gc_mark = PythonScriptInstance::gc_mark_instances;
@@ -157,7 +158,6 @@ void setup_python_bindings() {
 	py_tphookattributes(pyctx()->tp_GDNativeClass, GDNativeClass_getattribute, NULL, NULL, GDNativeClass_getunboundmethod);
 
 	py_bindmethod(pyctx()->tp_GDNativeClass, "__call__", [](int argc, py_Ref argv) -> bool {
-		PY_CHECK_ARG_TYPE(0, pyctx()->tp_GDNativeClass);
 		GDNativeClass *p = (GDNativeClass *)py_totrivial(argv);
 		StringName clazz = python_name_to_godot(p->name);
 
