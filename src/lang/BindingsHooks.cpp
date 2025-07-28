@@ -110,7 +110,7 @@ static bool godot_isinstance_one(py_Ref obj, py_Ref type_obj) {
 		return py_isinstance(obj, py_totype(type_obj));
 	}
 	py_Type t1 = py_typeof(obj);
-	py_Type t2 = py_totype(type_obj);
+	py_Type t2 = py_typeof(type_obj);
 	if (t1 == pyctx()->tp_Variant && t2 == pyctx()->tp_GDNativeClass) {
 		Variant v = to_variant_exact(obj);
 		GDNativeClass *p = (GDNativeClass *)py_totrivial(type_obj);
