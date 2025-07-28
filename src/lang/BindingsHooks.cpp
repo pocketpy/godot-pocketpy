@@ -28,6 +28,10 @@ bool Variant_getattribute(py_Ref self, py_Name name) {
 }
 
 bool Variant_setattribute(py_Ref self, py_Name name, py_Ref value) {
+	if (self->extra != Variant::OBJECT) {
+		String name = Variant::get_type_name((Variant::Type)self->extra);
+		return TypeError("Variant of type '%s' does not support attribute assignment", name.utf8().get_data());
+	}
 	Variant v = to_variant_exact(self);
 	bool r_valid;
 	v.set_named(python_name_to_godot(name), py_tovariant(value), r_valid);
@@ -38,21 +42,22 @@ bool Variant_setattribute(py_Ref self, py_Name name, py_Ref value) {
 }
 
 bool Variant_getunboundmethod(py_Ref self, py_Name name) {
-	static thread_local Callable curr_callable;
 	Variant v = to_variant_exact(self);
 	StringName name_sn = python_name_to_godot(name);
 	bool r_valid;
 	Variant res = v.get_named(python_name_to_godot(name), r_valid);
 	if (r_valid) {
 		if (res.get_type() == Variant::CALLABLE) {
-			curr_callable = res.operator Callable();
+			pythreadctx()->pending_callables.append(res.operator Callable());
 			py_newnativefunc(py_retval(), [](int argc, py_Ref argv) -> bool {
+				Vector<Callable> *stack = &pythreadctx()->pending_callables;
 				Array godot_args;
 				for (int i = 1; i < argc; i++) {
 					godot_args.push_back(py_tovariant(&argv[i]));
 				}
-				Variant res = curr_callable.callv(godot_args);
-                curr_callable = Callable();
+				int last_idx = (int)stack->size() - 1;
+				Variant res = stack->operator[](last_idx).callv(godot_args);
+				stack->remove_at(last_idx);
 				py_newvariant(py_retval(), &res);
 				return true;
 			});

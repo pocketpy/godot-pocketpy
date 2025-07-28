@@ -27,5 +27,5 @@ class MyScript(Extends(Node)):
 		self.health_changed.emit(100, 200)
 
 	def _process(self, delta: float) -> None:
-		return
-		print('==>', f'_process({delta:.4f})')
+		if Input.is_key_pressed(KEY_SPACE):
+			print('SPACE!!!', f'_process({delta:.4f})')

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "gdextension_interface.h"
+#include "godot_cpp/variant/callable.hpp"
 #include "pocketpy.h"
 
 #include <atomic>
@@ -86,6 +87,10 @@ struct PythonContext {
 	} names;
 };
 
+struct PythonThreadContext {
+	Vector<Callable> pending_callables;
+};
+
 struct GDNativeClass {
 	Variant::Type type;
 	py_Name name;
@@ -144,6 +149,7 @@ struct SignalStatement : DefineStatement {
 };
 
 PythonContext *pyctx();
+PythonThreadContext *pythreadctx();
 
 void log_python_error_and_clearexc(py_StackRef p0);
 

@@ -12,6 +12,16 @@ PythonContext *pyctx() {
 	return _pyctx;
 }
 
+PythonThreadContext *pythreadctx() {
+	void *ctx = py_getvmctx();
+	if (!ctx) {
+		PythonThreadContext *new_ctx = new PythonThreadContext();
+		py_setvmctx(new_ctx);
+		return new_ctx;
+	}
+	return (PythonThreadContext *)ctx;
+}
+
 static_assert(sizeof(Variant) == sizeof(py_TValue));
 
 // static constexpr bool needs_deinit[Variant::VARIANT_MAX] = {
@@ -153,7 +163,7 @@ void py_newvariant(py_OutRef out, const Variant *val) {
 		}
 		default: {
 			void *ud = py_newobject(out, pyctx()->tp_Variant, 0, sizeof(Variant));
-			out->extra = Variant::OBJECT;
+			out->extra = Variant::OBJECT; // not only real OBJECT but also PackedStringArray like
 			Variant *v = new (ud) Variant(*val);
 			break;
 		}
