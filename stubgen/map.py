@@ -348,7 +348,7 @@ def default(gdt_expr: str) -> typing.Any: ...
                     right_type = operator.right_type
                     if right_type:
                         right_type = converters.convert_type_name(right_type)
-                        
+
                     right_type_is_alias = right_type in list(
                         converters.ALIAS_CLASS_DATA.loc[:, "cls_name"]
                     )
@@ -423,9 +423,18 @@ def default(gdt_expr: str) -> typing.Any: ...
 
                 # ------Method
                 method_name = converters.convert_keyword_name(method.name)
+                generic_expr = ''
+
+                if class_name == 'Node':
+                    ret_t_override = converters.NODE_GENERIC_METHODS.get(method_name)
+                    if ret_t_override is not None:
+                        ret_t = ret_t_override
+                        generic_expr = f"[T: Node]"
+
                 writer.writefmt(
-                    "def {0}({1}) -> {2}: ...",
+                    "def {0}{1}({2}) -> {3}: ...",
                     method_name,
+                    generic_expr,
                     ", ".join(arg_expr),
                     ret_t,
                 )
@@ -496,7 +505,7 @@ from .enums import *
 from .header import *
 
 
-def load(path: str): ...
+def load[T: classes.Resource](path: str) -> T: ...
 """
     )
 

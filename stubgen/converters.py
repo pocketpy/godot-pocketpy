@@ -311,6 +311,11 @@ def append_records(
 
     return df
 
+NODE_GENERIC_METHODS = {
+    'get_node': 'T',
+    'get_node_or_null': 'T | None',
+    'get_parent': 'T',
+}
 
 OPERATORS_TABLE = {
     "<": "__lt__",
