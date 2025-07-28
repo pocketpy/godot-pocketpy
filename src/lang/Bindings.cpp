@@ -91,6 +91,7 @@ void setup_python_bindings() {
 	pyctx()->main_thread_id = std::this_thread::get_id();
 	pyctx()->lock.clear();
 	pyctx()->names.__init__ = py_name("__init__");
+	pyctx()->names.__name__ = py_name("__name__");
 	pyctx()->names.script = py_name("script");
 
 	py_callbacks()->gc_mark = PythonScriptInstance::gc_mark_instances;
@@ -126,6 +127,8 @@ void setup_python_bindings() {
 
 	py_GlobalRef godot = pyctx()->godot = py_newmodule("godot");
 	pyctx()->godot_classes = py_newmodule("godot.classes");
+
+	py_bindfunc(godot, "isinstance", godot_isinstance);
 
 	// load()
 	py_bindfunc(godot, "load", [](int argc, py_Ref argv) -> bool {

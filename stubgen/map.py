@@ -491,12 +491,12 @@ from . import classes
 def gen_init_pyi_writer(gdt_all_in_one: GodotInOne, pyi_writer: Writer) -> Writer:
     pyi_writer.write(
         """\
-from . import classes
 from .enums import *
 from .header import *
+from . import classes
 
-
-def load(path: str): ...
+def load(path: str) -> classes.Resource: ...
+def isinstance(obj, type_obj) -> bool: ...
 """
     )
 

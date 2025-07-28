@@ -69,6 +69,10 @@ bool Variant_getunboundmethod(py_Ref self, py_Name name) {
 
 bool GDNativeClass_getattribute(py_Ref self, py_Name name) {
 	StringName clazz = to_GDNativeClass(self);
+	if (name == pyctx()->names.__name__) {
+		py_newstring(py_retval(), String(clazz));
+		return true;
+	}
 	StringName sn = python_name_to_godot(name);
 	bool has_int_const = ClassDB::class_has_integer_constant(clazz, sn);
 	if (has_int_const) {
@@ -99,6 +103,50 @@ bool handle_gde_call_error(GDExtensionCallError error) {
 		default:
 			return RuntimeError("GDExtensionCallError: %d", (int)error.error);
 	}
+}
+
+static bool godot_isinstance_one(py_Ref obj, py_Ref type_obj) {
+	if (py_istype(type_obj, tp_type)) {
+		return py_isinstance(obj, py_totype(type_obj));
+	}
+	py_Type t1 = py_typeof(obj);
+	py_Type t2 = py_totype(type_obj);
+	if (t1 == pyctx()->tp_Variant && t2 == pyctx()->tp_GDNativeClass) {
+		Variant v = to_variant_exact(obj);
+		GDNativeClass *p = (GDNativeClass *)py_totrivial(type_obj);
+		if (Object *v_obj = v.operator Object *()) {
+			return v_obj->is_class(python_name_to_godot(p->name));
+		}
+		return v.get_type() == p->type;
+	}
+
+	const char *t1_name = py_tpname(t1);
+	const char *t2_name = py_tpname(t2);
+	String error = "godot.isinstance() takes unexpected arguments: ";
+	error += t1_name;
+	error += " and ";
+	error += t2_name;
+	WARN_PRINT(error);
+	return false;
+}
+
+bool godot_isinstance(int argc, py_Ref argv) {
+	PY_CHECK_ARGC(2);
+	if (py_istuple(py_arg(1))) {
+		int length = py_tuple_len(py_arg(1));
+		for (int i = 0; i < length; i++) {
+			py_Ref item = py_tuple_getitem(py_arg(1), i);
+			if (godot_isinstance_one(py_arg(0), item)) {
+				py_newbool(py_retval(), true);
+				return true;
+			}
+		}
+		py_newbool(py_retval(), false);
+		return true;
+	}
+
+	py_newbool(py_retval(), godot_isinstance_one(py_arg(0), py_arg(1)));
+	return true;
 }
 
 void register_GDNativeClass(Variant::Type type, const char *name) {

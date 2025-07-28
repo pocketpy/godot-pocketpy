@@ -84,6 +84,7 @@ struct PythonContext {
 	PythonScriptReloadingContext reloading_context;
 	struct {
 		py_Name __init__;
+		py_Name __name__;
 		py_Name script;
 	} names;
 };
