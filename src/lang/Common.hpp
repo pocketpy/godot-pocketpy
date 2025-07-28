@@ -73,6 +73,7 @@ struct InternalArguments {
 
 struct PythonContext {
 	py_GlobalRef godot;
+	py_GlobalRef godot_classes;
 	py_Type tp_Script;
 	py_Type tp_GDNativeClass;
 	py_Type tp_Variant;

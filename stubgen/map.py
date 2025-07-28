@@ -110,21 +110,11 @@ def gen_header_pyi_writer(gdt_all_in_one: GodotInOne, pyi_writer: Writer) -> Wri
     pyi_writer.write(
 """\
 from . import classes
-import typing
-
 
 class PythonScriptInstance[T: classes.Object]:
     owner: T
 
-class GDNativeClass[T: classes.Object]:
-    @property
-    def script(self) -> PythonScriptInstance[T]: ...
-    def __new__(cls, *args) -> T: ...
-
-class GDBuiltinClass[T: classes.Variant]:
-    def __new__(cls, *args) -> T: ...
-
-def Extends[T: classes.Object](cls: type[GDNativeClass[T]]) -> type[PythonScriptInstance[T]]: ...
+def Extends[T: classes.Object](cls: type[T]) -> type[PythonScriptInstance[T]]: ...
 
 def export[T](cls: type[T], default=None) -> T: ...
 def export_range[T: int | float](min: T, max: T, step: T, default: T | None = None) -> T: ...
@@ -197,20 +187,22 @@ def default(gdt_expr: str) -> typing.Any: ...
 
 """
     )
-    class_writer: Writer = pyi_writer
+    writer: Writer = pyi_writer
 
     # -----手动定义Variant
-    class_writer.write("class Variant:")
-    class_writer.indent()
-    class_writer.write("...")
-    class_writer.dedent()
-    class_writer.write("")
+    writer.write("class Variant:")
+    writer.indent()
+    writer.write("...")
+    writer.dedent()
+    writer.write("")
 
     for clazz in gdt_all_in_one.builtin_classes + gdt_all_in_one.classes:
-
         is_empty_class: bool = True
         # ------class xxx(xxx):
         class_name: str = converters.convert_class_name(clazz.name)
+
+        if class_name in converters.BLACKLIST_CLASS_NAMES:
+            continue
 
         if isinstance(clazz, BuiltinClass):
             class_inherits = "Variant"
@@ -221,11 +213,52 @@ def default(gdt_expr: str) -> typing.Any: ...
                 else None
             )
 
-        class_writer.writefmt(
+        writer.writefmt(
             "class {0}{1}:", class_name, f"({class_inherits})" if class_inherits else ""
         )
 
-        class_writer.indent()
+        writer.indent()
+
+        # ------init
+        if isinstance(clazz, BuiltinClass):
+            if clazz.constructors:
+                for constructor in clazz.constructors:
+                    
+                    method = constructor
+                    
+                    # ------Arguments
+                    arg_expr = []
+                    arg_expr.append("self")
+                    
+                    for arg in method.arguments or []:
+                    
+                        arg_name = converters.convert_keyword_name(arg.name)
+                        arg_type = converters.convert_type_name(arg.type)
+                        # arg_name += arg_type
+                        arg_type_is_alias = arg_type in list(
+                            converters.ALIAS_CLASS_DATA.loc[:, "cls_name"]
+                        )
+
+                        arg_default_value = None
+                    
+                        if arg_type_is_alias:
+                            alias_module_path = "alias"
+                            expr = f"{arg_name}: {alias_module_path}.{arg_type}"
+                        else:
+                            expr = f"{arg_name}: {arg_type}"
+                    
+                        arg_expr.append(expr)
+                    
+                    # ------Method
+                    if len(clazz.constructors) > 1:
+                        writer.write("@overload")
+                    method_name = "__init__"
+                    writer.writefmt(
+                        "def {0}({1}): ...",
+                        method_name,
+                        ", ".join(arg_expr)
+                    )
+        writer.write('')
 
         # ------Member variables
         if isinstance(clazz, BuiltinClass):
@@ -239,9 +272,9 @@ def default(gdt_expr: str) -> typing.Any: ...
                 member_name: str = converters.convert_keyword_name(member_data.name)
                 member_type: str = converters.convert_type_name(member_data.type)
 
-                class_writer.writefmt("{0}: {1}", member_name, member_type)
+                writer.writefmt("{0}: {1}", member_name, member_type)
 
-            class_writer.write("")
+            writer.write("")
             is_empty_class = False
 
         # ------Signals
@@ -266,7 +299,7 @@ def default(gdt_expr: str) -> typing.Any: ...
                         arg_comment_expr_list.append(arg_name + ":" + arg_type)
                         arg_expr_list.append(arg_type)
 
-                    class_writer.writefmt(
+                    writer.writefmt(
                         "{0}: Signal[typing.Callable[[{1}], None]]  # {2}",
                         signal.name,
                         ", ".join(arg_expr_list),
@@ -277,7 +310,7 @@ def default(gdt_expr: str) -> typing.Any: ...
                         ),
                     )
 
-                class_writer.write("")
+                writer.write("")
                 is_empty_class = False
 
         # ------Class variables
@@ -290,9 +323,9 @@ def default(gdt_expr: str) -> typing.Any: ...
             for const in class_consts:
                 const_name = converters.convert_keyword_name(const.name)
                 value = str(const.value)
-                class_writer.write(f"{const_name} = default({value!r})")  # TODO
+                writer.write(f"{const_name} = default({value!r})")  # TODO
 
-            class_writer.write("")
+            writer.write("")
             is_empty_class = False
 
         # ------Operators
@@ -310,30 +343,35 @@ def default(gdt_expr: str) -> typing.Any: ...
                         orign_operator_name
                     )
                     return_type = operator.return_type
+                    return_type = converters.convert_type_name(return_type)
+
                     right_type = operator.right_type
+                    if right_type:
+                        right_type = converters.convert_type_name(right_type)
+                        
                     right_type_is_alias = right_type in list(
                         converters.ALIAS_CLASS_DATA.loc[:, "cls_name"]
                     )
 
                     if converters.is_overload_operator(class_name, operator_name):
-                        class_writer.write("@overload")
+                        writer.write("@overload")
 
                     if right_type:
                         alias_module_path = "alias"
                         if right_type_is_alias:
-                            class_writer.write(
+                            writer.write(
                                 f"def {operator_name}(self, right: {alias_module_path}.{right_type}) -> {return_type}: ..."
                             )
                         else:
-                            class_writer.write(
+                            writer.write(
                                 f"def {operator_name}(self, right: {right_type}) -> {return_type}: ..."
                             )
                     else:
-                        class_writer.write(
+                        writer.write(
                             f"def {operator_name}(self) -> {return_type}: ..."
                         )
 
-            class_writer.write("")
+            writer.write("")
             is_empty_class = False        
         
         # ------Class methods
@@ -353,7 +391,7 @@ def default(gdt_expr: str) -> typing.Any: ...
                 # ------Arguments
                 arg_expr = []
                 if method.is_static:
-                    class_writer.write("@staticmethod")
+                    writer.write("@staticmethod")
                 else:
                     arg_expr.append("self")
 
@@ -385,26 +423,26 @@ def default(gdt_expr: str) -> typing.Any: ...
 
                 # ------Method
                 method_name = converters.convert_keyword_name(method.name)
-                class_writer.writefmt(
+                writer.writefmt(
                     "def {0}({1}) -> {2}: ...",
                     method_name,
                     ", ".join(arg_expr),
                     ret_t,
                 )
 
-            class_writer.write("")
+            writer.write("")
             is_empty_class = False
         
         if clazz.name == "Object":
-            class_writer.write("@property")
-            class_writer.write("def script(self): ...")
-            class_writer.write("")
+            writer.write("@property")
+            writer.write("def script(self): ...")
+            writer.write("")
             is_empty_class = False
 
         if is_empty_class:
-            class_writer.write("...")
-        class_writer.dedent()
-        class_writer.write("")
+            writer.write("...")
+        writer.dedent()
+        writer.write("")
 
     return pyi_writer
 
@@ -453,9 +491,7 @@ from . import classes
 def gen_init_pyi_writer(gdt_all_in_one: GodotInOne, pyi_writer: Writer) -> Writer:
     pyi_writer.write(
         """\
-from typing import overload
-from . import classes, alias
-from .classes import Variant
+from . import classes
 from .enums import *
 from .header import *
 
@@ -469,90 +505,6 @@ def load(path: str): ...
     for clazz in gdt_all_in_one.singletons:
         writer.writefmt('{}: classes.{}', clazz.name, clazz.type)
     writer.write('')
-
-    for clazz in gdt_all_in_one.builtin_classes + gdt_all_in_one.classes:
-        cls_name = converters.convert_class_name(clazz.name)
-        cls_type_name = converters.convert_class_name(clazz.name).split("[")[
-            0
-        ]  # 忽略模板参数
-
-        if cls_name in converters.SINGLETON_CLASS_NAMES:
-            continue
-        if cls_name in converters.BLACKLIST_CLASS_NAMES:
-            continue
-
-        records = converters.find_records(
-            converters.CLASS_ENUM_DATA, {"cls_name": cls_name}
-        )
-        cls_enum = None
-        if len(records) > 0:
-            cls_enum = records.iloc[0].loc["cls_enum_name"]
-
-        if isinstance(clazz, BuiltinClass):
-            inherit_1 = f"GDBuiltinClass[classes.{cls_type_name}]"
-        else:
-            inherit_1 = f"GDNativeClass[classes.{cls_type_name}]"
-
-        if cls_enum:
-            inherit_2 = f"{cls_enum}"
-        else:
-            inherit_2 = None
-
-        if inherit_2:
-            writer.write(f"class {cls_name}({inherit_1}, {inherit_2}):")
-        else:
-            writer.write(f"class {cls_name}({inherit_1}):")
-
-        is_empty_class = True
-        writer.indent()
-
-        # ------init
-        if isinstance(clazz, BuiltinClass):
-            if clazz.constructors:
-                for constructor in clazz.constructors:
-                    
-                    method = constructor
-                    
-                    # ------Arguments
-                    arg_expr = []
-                    arg_expr.append("self")
-                    
-                    for arg in method.arguments or []:
-                    
-                        arg_name = converters.convert_keyword_name(arg.name)
-                        arg_type = converters.convert_type_name(arg.type)
-                        # arg_name += arg_type
-                        arg_type_is_alias = arg_type in list(
-                            converters.ALIAS_CLASS_DATA.loc[:, "cls_name"]
-                        )
-
-                        arg_default_value = None
-                    
-                        if arg_type_is_alias:
-                            alias_module_path = "alias"
-                            expr = f"{arg_name}: {alias_module_path}.{arg_type}"
-                        else:
-                            expr = f"{arg_name}: {arg_type}"
-                    
-                        arg_expr.append(expr)
-                    
-                    # ------Method
-                    if len(clazz.constructors) > 1:
-                        writer.write("@overload")
-                    method_name = "__init__"
-                    writer.writefmt(
-                        "def {0}({1}): ...",
-                        method_name,
-                        ", ".join(arg_expr)
-                    )
-                    is_empty_class = False
-
-        if is_empty_class:
-            writer.write("...")
-
-        writer.dedent()
-        writer.write('\n')
-
     return pyi_writer
 
 

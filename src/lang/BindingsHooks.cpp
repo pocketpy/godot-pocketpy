@@ -106,7 +106,7 @@ void register_GDNativeClass(Variant::Type type, const char *name) {
 	py_Name sn = py_name(name);
 	GDNativeClass clazz(type, sn);
 	py_newtrivial(&tmp, pyctx()->tp_GDNativeClass, &clazz, sizeof(GDNativeClass));
-	py_setdict(pyctx()->godot, sn, &tmp);
+	py_setdict(pyctx()->godot_classes, sn, &tmp);
 }
 
 void register_GDNativeSingleton(const char *name, Object *obj) {

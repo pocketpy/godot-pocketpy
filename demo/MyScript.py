@@ -1,4 +1,5 @@
 from godot import *
+from godot.classes import Node, TileSet, Vector2
 
 import test
 
