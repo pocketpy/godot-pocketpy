@@ -89,29 +89,19 @@ struct PythonContext {
 	} names;
 };
 
-struct PythonThreadContext {
-	Vector<Callable> pending_callables;
-};
-
 struct GDNativeClass {
 	Variant::Type type;
 	py_Name name;
 
+	GDNativeClass() :
+			type(Variant::NIL), name(NULL) {}
 	GDNativeClass(Variant::Type type, py_Name clazz) :
 			type(type), name(clazz) {}
 };
 
-class UninitializedVariant {
-	alignas(8) char data[sizeof(Variant)];
-
-public:
-	~UninitializedVariant() {
-		((Variant *)data)->~Variant();
-	}
-
-	Variant *ptr() {
-		return (Variant *)data;
-	}
+struct PythonThreadContext {
+	Vector<Callable> pending_callables;
+	Vector<std::pair<GDNativeClass, py_Name>> pending_nativecalls;
 };
 
 struct DefineStatement {

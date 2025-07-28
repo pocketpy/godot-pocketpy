@@ -375,14 +375,14 @@ String PythonScript::_to_string() const {
 }
 
 static Variant construct_default_variant(Variant::Type type) {
-	UninitializedVariant uninitialized_res;
-	GDExtensionCallError error;
-	internal::gdextension_interface_variant_construct((GDExtensionVariantType)type, uninitialized_res.ptr(), nullptr, 0, &error);
-	if (error.error != GDEXTENSION_CALL_OK) {
+	Variant r_ret;
+	GDExtensionCallError r_error;
+	internal::gdextension_interface_variant_construct((GDExtensionVariantType)type, &r_ret, nullptr, 0, &r_error);
+	if (r_error.error != GDEXTENSION_CALL_OK) {
 		ERR_PRINT("construct_default_variant() failed: " + Variant::get_type_name(type));
 		return Variant();
 	}
-	return *uninitialized_res.ptr();
+	return r_ret;
 }
 
 void PythonScript::_update_placeholder_exports(void *placeholder) const {

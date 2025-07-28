@@ -15,6 +15,7 @@ bool Variant_getattribute(py_Ref self, py_Name name);
 bool Variant_setattribute(py_Ref self, py_Name name, py_Ref value);
 bool Variant_getunboundmethod(py_Ref self, py_Name name);
 bool GDNativeClass_getattribute(py_Ref self, py_Name name);
+bool GDNativeClass_getunboundmethod(py_Ref self, py_Name name);
 
 bool handle_gde_call_error(GDExtensionCallError error);
 bool godot_isinstance(int argc, py_Ref argv);

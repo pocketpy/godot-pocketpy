@@ -96,10 +96,11 @@ void setup_python_bindings() {
 
 	py_callbacks()->gc_mark = PythonScriptInstance::gc_mark_instances;
 	py_callbacks()->print = [](const char *msg) {
-		String s(msg);
-		if (s.ends_with(String("\n"))) {
-			s = s.substr(0, s.length() - 1);
+		size_t length = strlen(msg);
+		if (msg[length - 1] == '\n') {
+			length--;
 		}
+		String s = String::utf8(msg, length);
 		print_line(s);
 	};
 	py_callbacks()->flush = []() {
@@ -153,7 +154,7 @@ void setup_python_bindings() {
 	// GDNativeClass
 	pyctx()->tp_GDNativeClass = py_newtype("GDNativeClass", tp_object, godot, NULL);
 
-	py_tphookattributes(pyctx()->tp_GDNativeClass, GDNativeClass_getattribute, NULL, NULL, NULL);
+	py_tphookattributes(pyctx()->tp_GDNativeClass, GDNativeClass_getattribute, NULL, NULL, GDNativeClass_getunboundmethod);
 
 	py_bindmethod(pyctx()->tp_GDNativeClass, "__call__", [](int argc, py_Ref argv) -> bool {
 		PY_CHECK_ARG_TYPE(0, pyctx()->tp_GDNativeClass);
@@ -172,13 +173,13 @@ void setup_python_bindings() {
 			for (int i = 1; i < argc; i++) {
 				arguments.append(py_tovariant(&argv[i]));
 			}
-			UninitializedVariant uninitialized_res;
-			GDExtensionCallError error;
-			internal::gdextension_interface_variant_construct((GDExtensionVariantType)p->type, uninitialized_res.ptr(), arguments.ptr(), arguments.size(), &error);
-			if (!handle_gde_call_error(error)) {
+			Variant r_ret;
+			GDExtensionCallError r_error;
+			internal::gdextension_interface_variant_construct((GDExtensionVariantType)p->type, &r_ret, arguments.ptr(), arguments.size(), &r_error);
+			if (!handle_gde_call_error(r_error)) {
 				return false;
 			}
-			py_newvariant(py_retval(), uninitialized_res.ptr());
+			py_newvariant(py_retval(), &r_ret);
 		}
 		return true;
 	});

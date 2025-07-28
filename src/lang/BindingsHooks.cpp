@@ -49,7 +49,7 @@ bool Variant_getunboundmethod(py_Ref self, py_Name name) {
 	if (r_valid) {
 		if (res.get_type() == Variant::CALLABLE) {
 			pythreadctx()->pending_callables.append(res.operator Callable());
-			py_newnativefunc(py_retval(), [](int argc, py_Ref argv) -> bool {
+			py_newnativefunc(py_retval(), [](int argc, py_Ref argv) {
 				Vector<Callable> *stack = &pythreadctx()->pending_callables;
 				Array godot_args;
 				for (int i = 1; i < argc; i++) {
@@ -74,6 +74,7 @@ bool GDNativeClass_getattribute(py_Ref self, py_Name name) {
 		return true;
 	}
 	StringName sn = python_name_to_godot(name);
+	// const
 	bool has_int_const = ClassDB::class_has_integer_constant(clazz, sn);
 	if (has_int_const) {
 		int64_t int_value = ClassDB::class_get_integer_constant(clazz, sn);
@@ -82,6 +83,40 @@ bool GDNativeClass_getattribute(py_Ref self, py_Name name) {
 	}
 	return py_exception(tp_AttributeError, "GDNativeClass '%n' has no attribute '%n'",
 			godot_name_to_python(clazz), name);
+}
+
+bool GDNativeClass_getunboundmethod(py_Ref self, py_Name name) {
+	GDNativeClass *p = (GDNativeClass *)py_totrivial(self);
+	pythreadctx()->pending_nativecalls.append(std::make_pair(*p, name));
+	py_newnativefunc(py_retval(), [](int argc, py_Ref argv) -> bool {
+		Vector<std::pair<GDNativeClass, py_Name>> *stack = &pythreadctx()->pending_nativecalls;
+		int last_idx = (int)stack->size() - 1;
+		std::pair<GDNativeClass, py_Name> pair = stack->operator[](last_idx);
+		stack->remove_at(last_idx);
+
+		InternalArguments args;
+		for (int i = 1; i < argc; i++) {
+			args.append(py_tovariant(&argv[i]));
+		}
+
+		Variant r_ret;
+		GDExtensionCallError r_error;
+		StringName method = python_name_to_godot(pair.second);
+		if (pair.first.type == Variant::OBJECT) {
+			static GDExtensionMethodBindPtr _gde_method_bind = internal::gdextension_interface_classdb_get_method_bind(ClassDBSingleton::get_class_static()._native_ptr(), StringName("class_call_static")._native_ptr(), 3344196419);
+			CHECK_METHOD_BIND_RET(_gde_method_bind, (Variant()));
+			internal::gdextension_interface_object_method_bind_call(_gde_method_bind, nullptr, args.ptr(), args.size(), &r_ret, &r_error);
+		} else {
+			godot::internal::gdextension_interface_variant_call_static(
+					(GDExtensionVariantType)pair.first.type, &method, args.ptr(), args.size(), &r_ret, &r_error);
+		}
+		if (!handle_gde_call_error(r_error)) {
+			return false;
+		}
+		py_newvariant(py_retval(), &r_ret);
+		return true;
+	});
+	return true;
 }
 
 bool handle_gde_call_error(GDExtensionCallError error) {
