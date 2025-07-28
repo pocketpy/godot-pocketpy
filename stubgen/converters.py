@@ -91,6 +91,9 @@ CLASS_TO_VARIANT_TYPE: dict[str, str] = {
     "PackedVector4Array": "Variant::PACKED_VECTOR4_ARRAY",
 }
 
+SINGLETON_CLASS_NAMES: set[str] = set()
+BLACKLIST_CLASS_NAMES: set[str] = {'Nil', 'Bool', 'Int', 'Float', 'String'}
+
 
 def convert_class_name(name: str) -> str:
     assert name is not None

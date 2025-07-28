@@ -103,6 +103,9 @@ def fill_converters(gdt_all_in_one: GodotInOne):
                         },
                     )
 
+    for clazz in gdt_all_in_one.singletons:
+        converters.SINGLETON_CLASS_NAMES.add(clazz.name)
+
 def gen_header_pyi_writer(gdt_all_in_one: GodotInOne, pyi_writer: Writer) -> Writer:
     pyi_writer.write(
 """\
@@ -159,6 +162,11 @@ def gen_c_writer(gdt_all_in_one: GodotInOne, c_writer: Writer) -> Writer:
         )
 
     for clazz in gdt_all_in_one.builtin_classes + gdt_all_in_one.classes:
+        if clazz.name in converters.SINGLETON_CLASS_NAMES:
+            continue
+        if clazz.name in converters.BLACKLIST_CLASS_NAMES:
+            continue
+        
         variant_type = converters.CLASS_TO_VARIANT_TYPE.get(
             clazz.name, "Variant::OBJECT"
         )
@@ -457,14 +465,8 @@ def load(path: str): ...
 
     writer = pyi_writer
 
-    singleton_names = set()
-    blacklist_names = {
-        'Nil', 'Bool', 'Int', 'Float', 'String'
-    }
-
     for clazz in gdt_all_in_one.singletons:
         writer.writefmt('{}: classes.{}', clazz.name, clazz.type)
-        singleton_names.add(clazz.name)
     writer.write('')
 
     for clazz in gdt_all_in_one.builtin_classes + gdt_all_in_one.classes:
@@ -473,9 +475,9 @@ def load(path: str): ...
             0
         ]  # 忽略模板参数
 
-        if cls_name in singleton_names:
+        if cls_name in converters.SINGLETON_CLASS_NAMES:
             continue
-        if cls_name in blacklist_names:
+        if cls_name in converters.BLACKLIST_CLASS_NAMES:
             continue
 
         records = converters.find_records(
