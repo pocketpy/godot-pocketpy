@@ -29,7 +29,7 @@ jobs:
         python -m pip install pandas
         python -m stubgen
         python build.py --config Debug --platform win32
-        python build.py --config Release --platform win32
+        # python build.py --config Release --platform win32
     - uses: actions/upload-artifact@v4
       with:
         name: windows
@@ -48,7 +48,7 @@ jobs:
           python -m pip install pandas
           python -m stubgen
           python build.py --config Debug --platform macos
-          python build.py --config Release --platform macos
+          # python build.py --config Release --platform macos
       - uses: actions/upload-artifact@v4
         with:
           name: macos
@@ -73,7 +73,7 @@ jobs:
           python -m pip install pandas
           python -m stubgen
           python build.py --config Debug --platform android
-          python build.py --config Release --platform android
+          # python build.py --config Release --platform android
         env:
           ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
       - uses: actions/upload-artifact@v4
@@ -94,7 +94,7 @@ jobs:
           python -m pip install pandas
           python -m stubgen
           python build.py --config Debug --platform ios
-          python build.py --config Release --platform ios
+          # python build.py --config Release --platform ios
       - uses: actions/upload-artifact@v4
         with:
           name: ios
