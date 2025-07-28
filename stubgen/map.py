@@ -166,11 +166,12 @@ def gen_c_writer(gdt_all_in_one: GodotInOne, c_writer: Writer) -> Writer:
             continue
         if clazz.name in converters.BLACKLIST_CLASS_NAMES:
             continue
-        
+
         variant_type = converters.CLASS_TO_VARIANT_TYPE.get(
             clazz.name, "Variant::OBJECT"
         )
         c_writer.write(f'register_GDNativeClass({variant_type}, "{clazz.name}");')
+
     for enum in gdt_all_in_one.global_enums:
         for v in enum.values:
             c_writer.write(f'register_GlobalConstant("{v.name}", {v.value});')
@@ -599,13 +600,13 @@ def map_gdt_to_py(gdt_all_in_one: GodotInOne) -> MapResult:
         c_writer=Writer(),
     )
 
-    print("gen_c_writer")
-    gen_c_writer(gdt_all_in_one, map_result.c_writer)  # 暂不依赖converters
-    gen_header_pyi_writer(gdt_all_in_one, map_result.header_pyi)
-    
     print('fill_converters')
     fill_converters(gdt_all_in_one)
-    
+
+    print("gen_c_writer")
+    gen_c_writer(gdt_all_in_one, map_result.c_writer)
+    gen_header_pyi_writer(gdt_all_in_one, map_result.header_pyi)
+        
     print('gen_alias_pyi_writer')
     gen_alias_pyi_writer(gdt_all_in_one, map_result.alias_pyi)
     print('gen_enums_pyi_writer')
