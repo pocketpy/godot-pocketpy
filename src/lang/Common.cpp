@@ -280,6 +280,9 @@ void log_python_error_and_clearexc(py_StackRef p0) {
 	print_error(String(msg));
 	PK_FREE(msg);
 	py_clearexc(p0);
+
+	pythreadctx()->pending_callables.clear();
+	pythreadctx()->pending_nativecalls.clear();
 }
 
 } // namespace pkpy
