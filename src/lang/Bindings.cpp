@@ -1,9 +1,7 @@
 #include "Bindings.hpp"
 #include "PythonScriptInstance.hpp"
-#include "gdextension_interface.h"
 #include "pocketpy/pocketpy.h"
 
-#include "godot_cpp/core/class_db.hpp"
 #include <godot_cpp/classes/engine.hpp>
 #include <godot_cpp/classes/file_access.hpp>
 #include <godot_cpp/classes/node.hpp>
@@ -156,33 +154,6 @@ void setup_python_bindings() {
 	pyctx()->tp_GDNativeClass = py_newtype("GDNativeClass", tp_object, godot, NULL);
 
 	py_tphookattributes(pyctx()->tp_GDNativeClass, GDNativeClass_getattribute, NULL, NULL, GDNativeClass_getunboundmethod);
-
-	py_bindmethod(pyctx()->tp_GDNativeClass, "__call__", [](int argc, py_Ref argv) -> bool {
-		GDNativeClass *p = (GDNativeClass *)py_totrivial(argv);
-		StringName clazz = python_name_to_godot(p->name);
-
-		if (p->type == Variant::OBJECT) {
-			PY_CHECK_ARGC(1);
-			if (!ClassDB::can_instantiate(clazz)) {
-				return TypeError("cannot instantiate class '%n'", p->name);
-			}
-			Variant res = ClassDB::instantiate(clazz);
-			py_newvariant(py_retval(), &res);
-		} else {
-			InternalArguments arguments;
-			for (int i = 1; i < argc; i++) {
-				arguments.append(py_tovariant(&argv[i]));
-			}
-			Variant r_ret;
-			GDExtensionCallError r_error;
-			internal::gdextension_interface_variant_construct((GDExtensionVariantType)p->type, &r_ret, arguments.ptr(), arguments.size(), &r_error);
-			if (!handle_gde_call_error(r_error)) {
-				return false;
-			}
-			py_newvariant(py_retval(), &r_ret);
-		}
-		return true;
-	});
 
 	// Extends
 	py_bindfunc(godot, "Extends", [](int argc, py_Ref argv) -> bool {
