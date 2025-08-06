@@ -1,3 +1,4 @@
 {
     "pythonVersion": "3.10",
+    "reportOverlappingOverload": "none"
 }
