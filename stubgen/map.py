@@ -450,7 +450,8 @@ def default(gdt_expr: str) -> typing.Any: ...
 def gen_alias_pyi_writer(gdt_all_in_one: GodotInOne, pyi_writer: Writer) -> Writer:
 
     modules = map(str, set(converters.ALIAS_CLASS_DATA.loc[:, "module_abs_path"]))
-
+    modules = [module for module in modules if module != ""]
+    
     pyi_writer.write(
         f"""\
 import {', '.join(modules)}
@@ -472,11 +473,18 @@ from . import classes
                 []
             )  # ["vmath.vec2", "vmath.vec3", ...]
             for _, record in found_records.iterrows():
-                alternative_cls_with_module_exprs.append(
-                    record.loc["module_abs_path"]
-                    + "."
-                    + record.loc["alternative_cls_name"]
-                )
+                module = record.loc["module_abs_path"] if record.loc["module_abs_path"] != "" else None
+                
+                if module is None:
+                    alternative_cls_with_module_exprs.append(
+                        record.loc["alternative_cls_name"]
+                    )
+                else:
+                    alternative_cls_with_module_exprs.append(
+                        record.loc["module_abs_path"]
+                        + "."
+                        + record.loc["alternative_cls_name"]
+                    )
 
             pyi_writer.writefmt(
                 "{0} = classes.{1} | {2}",
