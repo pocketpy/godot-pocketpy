@@ -1,4 +1,6 @@
 from unittest import signals
+
+from pandas.core.frame import DataFrame
 from .schema_gdt import *
 
 from . import enum
@@ -198,24 +200,52 @@ def default(gdt_expr: str) -> typing.Any: ...
 
     for clazz in gdt_all_in_one.builtin_classes + gdt_all_in_one.classes:
         is_empty_class: bool = True
-        # ------class xxx(xxx):
+        # ------class xxx(xxx, xxxEnum):
         class_name: str = converters.convert_class_name(clazz.name)
 
         if class_name in converters.BLACKLIST_CLASS_NAMES:
             continue
-
+        
+        # 获取 super class
         if isinstance(clazz, BuiltinClass):
-            class_inherits = "Variant"
+            super_class_name = "Variant"
         else:
-            class_inherits = (
+            super_class_name = (
                 converters.convert_class_name(clazz.inherits)
                 if clazz.inherits
                 else None
             )
 
-        writer.writefmt(
-            "class {0}{1}:", class_name, f"({class_inherits})" if class_inherits else ""
-        )
+        # 获取 xxxEnum
+        class_enum_name = None
+        found_enum_records = converters.find_records(
+                    converters.CLASS_ENUM_DATA,
+                    {"cls_name": clazz.name},
+                )
+        if found_enum_records.shape[0] > 0:
+            class_enum_name = found_enum_records.iloc[0]["cls_enum_name"]
+        
+        # 组装 (xxx, xxxEnum)
+        inherts = []
+        if super_class_name is not None:
+            inherts.append(super_class_name)
+        if class_enum_name is not None:
+            inherts.append(class_enum_name)
+        
+        inhert_str = None
+        if inherts != []:
+            inhert_str = ", ".join(inherts)
+        
+        # 组装 class xxx(xxx, xxxEnum)
+        if inhert_str is not None:
+            writer.writefmt("class {0}{1}:", 
+                class_name, 
+                f"({inhert_str})"
+            )
+        else:
+            writer.writefmt("class {0}:", 
+                class_name
+            )
 
         writer.indent()
 
