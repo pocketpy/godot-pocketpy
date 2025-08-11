@@ -135,9 +135,9 @@ Error PythonScript::_reload(bool keep_state) {
 
 	// PythonContextLock lock;
 	if (tid != pyctx()->main_thread_id) {
-		// py_switchvm(0);
-		ERR_PRINT("PythonScript.reload() must be called from the main thread!");
-		return ERR_UNAVAILABLE;
+		py_switchvm(0);
+		WARN_PRINT("PythonScript.reload() must be called from the main thread!");
+		// return ERR_UNAVAILABLE;
 	}
 
 	placeholder_fallback_enabled = true;
