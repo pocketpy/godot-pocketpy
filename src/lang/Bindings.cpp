@@ -105,7 +105,7 @@ void setup_python_bindings() {
 	py_callbacks()->flush = []() {
 		// No-op, Godot's print is already flushed.
 	};
-	py_callbacks()->importfile = [](const char *path_cstr) -> char * {
+	py_callbacks()->importfile = [](const char *path_cstr, int* size) -> char * {
 		String path = String::utf8(path_cstr);
 		path = "res://site-packages/" + path;
 		bool exists = FileAccess::file_exists(path);
@@ -122,6 +122,7 @@ void setup_python_bindings() {
 		char *dup = (char *)PK_MALLOC(content.length() + 1);
 		memcpy(dup, content.get_data(), content.length());
 		dup[content.length()] = '\0';
+		*size = (int)content.length();
 		return dup;
 	};
 
