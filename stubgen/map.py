@@ -49,7 +49,8 @@ def fill_converters(gdt_all_in_one: GodotInOne):
         if not cls_data.enums:
             continue
         cls_name = cls_data.name
-        enum_cls_name = f"{cls_name}Enum"
+        # enum_cls_name = f"{cls_name}Enum"
+        enum_cls_name = cls_name
 
         for enum_data in cls_data.enums:
             for v in enum_data.values or []:
@@ -201,14 +202,13 @@ def gen_typings_pyi_writers(gdt_all_in_one: GodotInOne):
     writer_v = Writer()
     writer_v.write(
         """\
-import typing
-from typing import overload
+from typing import overload, Literal, Any
 from .enums import *
 from .classes._Object import Object
 from . import alias
 
 intptr = int
-def default(gdt_expr: str) -> typing.Any: ...
+def default(gdt_expr: str) -> Any: ...
 
 """
     )
@@ -245,38 +245,18 @@ def default(gdt_expr: str) -> typing.Any: ...
             writer = Writer()
             writer.write(
         """\
-import typing
+from typing import Literal, Callable as typing_Callable
 from ._init import *
 
 """
             )
             all_writers[f"classes/_{class_name}.pyi"] = writer
 
-        # 获取 xxxEnum
-        class_enum_name = None
-        found_enum_records = converters.find_records(
-                    converters.CLASS_ENUM_DATA,
-                    {"cls_name": clazz.name},
-                )
-        if found_enum_records.shape[0] > 0:
-            class_enum_name = found_enum_records.iloc[0]["cls_enum_name"]
-        
-        # 组装 (xxx, xxxEnum)
-        inherts = []
-        if super_class_name is not None:
-            inherts.append(super_class_name)
-        if class_enum_name is not None:
-            inherts.append(class_enum_name)
-        
-        inhert_str = None
-        if inherts != []:
-            inhert_str = ", ".join(inherts)
-        
-        # 组装 class xxx(xxx, xxxEnum)
-        if inhert_str is not None:
-            writer.writefmt("class {0}{1}:", 
+        # 组装 class xxx(xxx)
+        if super_class_name:
+            writer.writefmt("class {0}({1}):", 
                 class_name, 
-                f"({inhert_str})"
+                super_class_name,
             )
         else:
             writer.writefmt("class {0}:", 
@@ -284,6 +264,14 @@ from ._init import *
             )
 
         writer.indent()
+
+        # 填充 enum
+        if clazz.enums:
+            for enum_data in clazz.enums:
+                if isinstance(enum_data, ClassesEnum):
+                    enum.gen_class_enum(writer, enum_data)
+                else:
+                    enum.gen_builtin_class_enum(writer, enum_data)
 
         # ------init
         if isinstance(clazz, BuiltinClass):
@@ -366,7 +354,7 @@ from ._init import *
                         arg_expr_list.append(arg_type)
 
                     writer.writefmt(
-                        "{0}: Signal[typing.Callable[[{1}], None]]  # {2}",
+                        "{0}: Signal[typing_Callable[[{1}], None]]  # {2}",
                         signal_name,
                         ", ".join(arg_expr_list),
                         (
@@ -590,28 +578,6 @@ from typing import Literal
     )
     # --- global enum ---
     enum.gen_global_enums(pyi_writer, gdt_all_in_one.global_enums)
-
-    # --- classes enum ---
-    enums_w = pyi_writer
-
-    for cls_data in gdt_all_in_one.classes + gdt_all_in_one.builtin_classes:
-        if not cls_data.enums:
-            continue
-        cls_name = cls_data.name
-        enum_cls_name = f"{cls_name}Enum"
-        enums_w.write(f"class {enum_cls_name}:")
-        enums_w.indent()
-
-        for enum_data in cls_data.enums:
-
-            if isinstance(enum_data, ClassesEnum):
-                enum.gen_class_enum(enums_w, enum_data)
-            else:
-                enum.gen_builtin_class_enum(enums_w, enum_data)
-
-        enums_w.dedent()
-        enums_w.write("\n")
-
     return pyi_writer
 
 
