@@ -73,12 +73,10 @@ bool GDNativeClass_getattribute(py_Ref self, py_Name name) {
 		py_newstring(py_retval(), String(clazz));
 		return true;
 	}
-	StringName sn = python_name_to_godot(name);
-	// const
-	bool has_int_const = ClassDB::class_has_integer_constant(clazz, sn);
-	if (has_int_const) {
-		int64_t int_value = ClassDB::class_get_integer_constant(clazz, sn);
-		py_newint(py_retval(), int_value);
+	String path = String(clazz) + "." + py_name2str(name);
+	auto ptr = pyctx()->class_constants.getptr(path);
+	if (ptr) {
+		py_newvariant(py_retval(), ptr);
 		return true;
 	}
 	return py_exception(tp_AttributeError, "GDNativeClass '%n' has no attribute '%n'",
@@ -235,6 +233,11 @@ void register_GDNativeSingleton(const char *name, Object *obj) {
 	Variant v(obj);
 	py_OutRef out = py_emplacedict(pyctx()->godot, py_name(name));
 	py_newvariant(out, &v);
+}
+
+void register_ClassConstant(const char *class_name, const char* name, Variant value) {
+	String path = String(class_name) + "." + name;
+	pyctx()->class_constants[path] = value;
 }
 
 void register_GlobalConstant(const char *name, py_i64 value) {

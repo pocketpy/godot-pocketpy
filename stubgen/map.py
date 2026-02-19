@@ -158,6 +158,8 @@ def gen_c_writer(gdt_all_in_one: GodotInOne, c_writer: Writer) -> list[str]:
     c_writer.write("void setup_bindings_generated() {")
     c_writer.indent()
 
+    c_writer.write('const float inf = std::numeric_limits<float>::infinity();')
+
     for clazz in gdt_all_in_one.singletons:
         cpp_name = clazz.name
         if cpp_name == "ClassDB":
@@ -178,6 +180,10 @@ def gen_c_writer(gdt_all_in_one: GodotInOne, c_writer: Writer) -> list[str]:
         c_writer.write(f'register_GDNativeClass({variant_type}, "{clazz.name}");')
         if variant_type != "Variant::OBJECT":
             global_variant_classes.append(clazz.name)
+
+        for c in clazz.constants or []:
+            const_name = converters.convert_keyword_name(c.name)
+            c_writer.write(f'register_ClassConstant("{clazz.name}", "{const_name}", {c.value});')
 
     for enum in gdt_all_in_one.global_enums:
         for v in enum.values:

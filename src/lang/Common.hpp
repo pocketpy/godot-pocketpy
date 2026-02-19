@@ -82,6 +82,7 @@ struct PythonContext {
 	std::thread::id main_thread_id;
 	std::atomic_flag lock;
 	PythonScriptReloadingContext reloading_context;
+	HashMap<String, Variant> class_constants;
 	struct {
 		py_Name __init__;
 		py_Name __name__;

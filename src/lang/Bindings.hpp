@@ -10,6 +10,7 @@ void setup_python_bindings();
 void register_GDNativeClass(Variant::Type type, const char *name);
 void register_GDNativeSingleton(const char *name, Object *obj);
 void register_GlobalConstant(const char *name, py_i64 value);
+void register_ClassConstant(const char *class_name, const char* name, Variant value);
 
 bool Variant_getattribute(py_Ref self, py_Name name);
 bool Variant_setattribute(py_Ref self, py_Name name, py_Ref value);
