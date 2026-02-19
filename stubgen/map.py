@@ -1,22 +1,38 @@
-from unittest import signals
-
-from pandas.core.frame import DataFrame
+import re
 from .schema_gdt import *
 
 from . import enum
-from .writer import Writer
-
-import re
 from . import converters
+from .writer import Writer
 
 # ===============================
 # 入口
 # ===============================
 
+FLOAT_PATTERN = re.compile('[-]?([0-9]*[.])?[0-9]+')
+INT_PATTERN = re.compile('[-]?[0-9]+')
+
+def parse_default(arg_type, val):
+    not_typed = arg_type is None
+    if INT_PATTERN.fullmatch(val) and (arg_type == 'int' or not_typed or 'Enum.' in arg_type):
+        return val
+    elif (arg_type == 'float' or not_typed) and FLOAT_PATTERN.fullmatch(val):
+        return val
+    elif (arg_type == 'str' or not_typed) and len(val) >= 2 and val[0] == val[-1] == '"':
+        return val
+    elif (arg_type == 'bool' or not_typed) and val == 'false':
+        return False
+    elif (arg_type == 'bool' or not_typed) and val == 'true':
+        return True
+    # elif val == 'null':
+    #     return None
+    else:
+        return f"default({val!r})"
 
 @dataclass
 class MapResult:
-    typings_pyi: Writer
+    classes_pyi: Writer
+    variants_pyi: Writer
     enums_pyi: Writer
     init_pyi: Writer
     alias_pyi: Writer
@@ -176,12 +192,13 @@ def gen_c_writer(gdt_all_in_one: GodotInOne, c_writer: Writer) -> Writer:
     return c_writer
 
 
-def gen_typings_pyi_writer(gdt_all_in_one: GodotInOne, pyi_writer: Writer) -> Writer:
-    pyi_writer.write(
+def gen_typings_pyi_writer(gdt_all_in_one: GodotInOne, pyi_writers: list[Writer]):
+    pyi_writers[0].write(
         """\
 import typing
 from typing import overload
 from .enums import *
+from .classes import Object
 from . import alias
 
 intptr = int
@@ -189,16 +206,24 @@ def default(gdt_expr: str) -> typing.Any: ...
 
 """
     )
-    writer: Writer = pyi_writer
 
     # -----手动定义Variant
-    writer.write("class Variant:")
-    writer.indent()
-    writer.write("...")
-    writer.dedent()
-    writer.write("")
+    pyi_writers[0].write("class Variant:")
+    pyi_writers[0].indent()
+    pyi_writers[0].write("...")
+    pyi_writers[0].dedent()
+    pyi_writers[0].write("")
+
+
+    pyi_writers[1].write(
+        """\
+import typing
+from .variants import *
+"""
+    )
 
     for clazz in gdt_all_in_one.builtin_classes + gdt_all_in_one.classes:
+        writer: Writer
         is_empty_class: bool = True
         # ------class xxx(xxx, xxxEnum):
         class_name: str = converters.convert_class_name(clazz.name)
@@ -209,13 +234,25 @@ def default(gdt_expr: str) -> typing.Any: ...
         # 获取 super class
         if isinstance(clazz, BuiltinClass):
             super_class_name = "Variant"
+            writer = pyi_writers[0]
         else:
             super_class_name = (
                 converters.convert_class_name(clazz.inherits)
                 if clazz.inherits
                 else None
             )
-
+            writer = pyi_writers[1]
+            # 过滤掉一些极少用到的类减少复杂度
+            should_continue = False
+            for st in converters.BLACKLIST_NAME_STARTS:
+                if class_name.startswith(st):
+                    should_continue = True
+                    break
+                if super_class_name and super_class_name.startswith(st):
+                    should_continue = True
+                    break
+            if should_continue:
+                continue
         # 获取 xxxEnum
         class_enum_name = None
         found_enum_records = converters.find_records(
@@ -353,7 +390,7 @@ def default(gdt_expr: str) -> typing.Any: ...
             for const in class_consts:
                 const_name = converters.convert_keyword_name(const.name)
                 value = str(const.value)
-                writer.write(f"{const_name} = default({value!r})")  # TODO
+                writer.write(f"{const_name} = {parse_default(None, value)}")
 
             writer.write("")
             is_empty_class = False
@@ -434,7 +471,7 @@ def default(gdt_expr: str) -> typing.Any: ...
                     )
 
                     if arg.default_value:
-                        arg_default_value = f"default({arg.default_value!r})"
+                        arg_default_value = parse_default(arg_type, arg.default_value)
                     else:
                         arg_default_value = None
 
@@ -474,8 +511,6 @@ def default(gdt_expr: str) -> typing.Any: ...
         writer.dedent()
         writer.write("")
 
-    return pyi_writer
-
 
 def gen_alias_pyi_writer(gdt_all_in_one: GodotInOne, pyi_writer: Writer) -> Writer:
 
@@ -485,9 +520,7 @@ def gen_alias_pyi_writer(gdt_all_in_one: GodotInOne, pyi_writer: Writer) -> Writ
     pyi_writer.write(
         f"""\
 import {', '.join(modules)}
-from . import classes
-
-
+from . import variants
 """
     )
 
@@ -517,7 +550,7 @@ from . import classes
                     )
 
             pyi_writer.writefmt(
-                "{0} = classes.{1} | {2}",
+                "{0} = variants.{1} | {2}",
                 cls_name,
                 cls_name,
                 " | ".join(alternative_cls_with_module_exprs),
@@ -540,7 +573,11 @@ def load(path: str) -> classes.Resource: ...
     writer = pyi_writer
 
     for clazz in gdt_all_in_one.singletons:
-        writer.writefmt('{}: classes.{}', clazz.name, clazz.type)
+        for st in converters.BLACKLIST_NAME_STARTS:
+            if clazz.name.startswith(st):
+                break
+        else:
+            writer.writefmt('{}: classes.{}', clazz.name, clazz.type)
     writer.write('')
     return pyi_writer
 
@@ -581,7 +618,8 @@ from typing import Literal
 def map_gdt_to_py(gdt_all_in_one: GodotInOne) -> MapResult:
 
     map_result = MapResult(
-        typings_pyi=Writer(),
+        classes_pyi=Writer(),
+        variants_pyi=Writer(),
         init_pyi=Writer(),
         alias_pyi=Writer(),
         enums_pyi=Writer(),
@@ -603,6 +641,6 @@ def map_gdt_to_py(gdt_all_in_one: GodotInOne) -> MapResult:
     print('gen_init_pyi_writer')
     gen_init_pyi_writer(gdt_all_in_one, map_result.init_pyi)
     print('gen_typings_pyi_writer')
-    gen_typings_pyi_writer(gdt_all_in_one, map_result.typings_pyi)
+    gen_typings_pyi_writer(gdt_all_in_one, [map_result.variants_pyi, map_result.classes_pyi])
 
     return map_result
