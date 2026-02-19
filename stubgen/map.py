@@ -165,9 +165,17 @@ def gen_c_writer(gdt_all_in_one: GodotInOne, c_writer: Writer) -> list[str]:
         cpp_name = clazz.name
         if cpp_name == "ClassDB":
             cpp_name = "ClassDBSingleton"
-        c_writer.write(
-            f'register_GDNativeSingleton("{clazz.name}", {cpp_name}::get_singleton());'
-        )
+
+        stmt = f'register_GDNativeSingleton("{clazz.name}", {cpp_name}::get_singleton());'
+        if clazz.name != 'EditorInterface':
+            c_writer.write(stmt)
+        else:
+            c_writer.write('if (Engine::get_singleton()->is_editor_hint()) {')
+            c_writer.indent()
+            c_writer.write(stmt)
+            c_writer.dedent()
+            c_writer.write('}')
+
 
     for clazz in gdt_all_in_one.builtin_classes + gdt_all_in_one.classes:
         if clazz.name in converters.SINGLETON_CLASS_NAMES:
