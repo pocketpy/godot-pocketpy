@@ -244,7 +244,7 @@ def default(gdt_expr: str) -> Any: ...
             writer = Writer()
             writer.write(
         """\
-from typing import Literal, Callable as typing_Callable
+from typing import Literal, Any, Callable as typing_Callable
 from ..enums import *
 from ._init import *
 
@@ -489,7 +489,7 @@ from ._init import *
         
         if clazz.name == "Object":
             writer.write("@property")
-            writer.write("def script(self) -> typing.Any: ...")
+            writer.write("def script(self) -> Any: ...")
             writer.write("")
             is_empty_class = False
 
