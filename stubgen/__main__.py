@@ -7,8 +7,6 @@ import shutil
 
 EXTENSION_API_PATH = 'godot-cpp/gdextension/extension_api.json'
 
-
-
 gdt_schema = parse_to_gdt_schema(EXTENSION_API_PATH)
 map_result = map_gdt_to_py(gdt_schema)
 
@@ -18,10 +16,7 @@ shutil.rmtree(TYPINGS_PATH, ignore_errors=True)
 shutil.copytree('pocketpy/include/typings', TYPINGS_PATH)
 os.mkdir(GODOT_TYPINGS_PATH)
 
-export_writer(map_result.enums_pyi, f'{GODOT_TYPINGS_PATH}/enums.pyi')
-export_writer(map_result.init_pyi, f'{GODOT_TYPINGS_PATH}/__init__.pyi')
 export_writer(map_result.c_writer, 'src/lang/BindingsGenerated.cpp')
-export_writer(map_result.variants_pyi, f'{GODOT_TYPINGS_PATH}/variants.pyi')
-export_writer(map_result.classes_pyi, f'{GODOT_TYPINGS_PATH}/classes.pyi')
-export_writer(map_result.alias_pyi, f'{GODOT_TYPINGS_PATH}/alias.pyi')
-export_writer(map_result.header_pyi, f'{GODOT_TYPINGS_PATH}/header.pyi')
+
+for path, writer in map_result.pyi_writers.items():
+    export_writer(writer, f'{GODOT_TYPINGS_PATH}/{path}')

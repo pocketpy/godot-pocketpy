@@ -93,7 +93,6 @@ CLASS_TO_VARIANT_TYPE: dict[str, str] = {
 
 SINGLETON_CLASS_NAMES: set[str] = set()
 BLACKLIST_CLASS_NAMES: set[str] = {'Nil', 'Bool', 'Int', 'Float', 'String'}
-BLACKLIST_NAME_STARTS = ['XR', 'OpenXR', 'VisualShader']
 
 def convert_class_name(name: str) -> str:
     assert name is not None
