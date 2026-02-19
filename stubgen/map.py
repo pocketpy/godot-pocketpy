@@ -136,7 +136,9 @@ def signal(*args: str) -> classes.Signal: ...
     )
     return pyi_writer
 
-def gen_c_writer(gdt_all_in_one: GodotInOne, c_writer: Writer) -> Writer:
+def gen_c_writer(gdt_all_in_one: GodotInOne, c_writer: Writer) -> list[str]:
+    global_variant_classes = []
+
     c_writer.write(
         """\
 #include "Bindings.hpp"
@@ -174,6 +176,8 @@ def gen_c_writer(gdt_all_in_one: GodotInOne, c_writer: Writer) -> Writer:
             clazz.name, "Variant::OBJECT"
         )
         c_writer.write(f'register_GDNativeClass({variant_type}, "{clazz.name}");')
+        if variant_type != "Variant::OBJECT":
+            global_variant_classes.append(clazz.name)
 
     for enum in gdt_all_in_one.global_enums:
         for v in enum.values:
@@ -184,7 +188,7 @@ def gen_c_writer(gdt_all_in_one: GodotInOne, c_writer: Writer) -> Writer:
     c_writer.write("")
     c_writer.write("} // namespace pkpy")
 
-    return c_writer
+    return global_variant_classes
 
 
 def gen_typings_pyi_writers(gdt_all_in_one: GodotInOne):
@@ -357,7 +361,7 @@ from ._init import *
 
                     writer.writefmt(
                         "{0}: Signal[typing.Callable[[{1}], None]]  # {2}",
-                        signal.name,
+                        signal_name,
                         ", ".join(arg_expr_list),
                         (
                             ", ".join(arg_comment_expr_list)
@@ -491,7 +495,7 @@ from ._init import *
         
         if clazz.name == "Object":
             writer.write("@property")
-            writer.write("def script(self): ...")
+            writer.write("def script(self) -> typing.Any: ...")
             writer.write("")
             is_empty_class = False
 
@@ -550,7 +554,7 @@ from . import variants
     return pyi_writer
 
 
-def gen_init_pyi_writer(gdt_all_in_one: GodotInOne, pyi_writer: Writer) -> Writer:
+def gen_init_pyi_writer(gdt_all_in_one: GodotInOne, pyi_writer: Writer, global_variant_classes: list[str]) -> Writer:
     pyi_writer.write(
         """\
 from .enums import *
@@ -566,6 +570,9 @@ def load(path: str) -> classes.Resource: ...
     for clazz in gdt_all_in_one.singletons:
         writer.writefmt('{}: classes.{}', clazz.name, clazz.type)
     writer.write('')
+
+    for clazz in global_variant_classes:
+        writer.writefmt('from .variants import {0} as {0}', clazz)
     return pyi_writer
 
 
@@ -615,7 +622,7 @@ def map_gdt_to_py(gdt_all_in_one: GodotInOne) -> MapResult:
     fill_converters(gdt_all_in_one)
 
     print("gen_c_writer")
-    gen_c_writer(gdt_all_in_one, map_result.c_writer)
+    global_variant_classes = gen_c_writer(gdt_all_in_one, map_result.c_writer)
 
     print('gen_header_pyi_writer')
     gen_header_pyi_writer(gdt_all_in_one, map_result.pyi_writers['header.pyi'])
@@ -624,7 +631,7 @@ def map_gdt_to_py(gdt_all_in_one: GodotInOne) -> MapResult:
     print('gen_enums_pyi_writer')
     gen_enums_pyi_writer(gdt_all_in_one, map_result.pyi_writers['enums.pyi'])
     print('gen_init_pyi_writer')
-    gen_init_pyi_writer(gdt_all_in_one, map_result.pyi_writers['__init__.pyi'])
+    gen_init_pyi_writer(gdt_all_in_one, map_result.pyi_writers['__init__.pyi'], global_variant_classes)
 
     print('gen_typings_pyi_writer')
     writer_v, writers = gen_typings_pyi_writers(gdt_all_in_one)

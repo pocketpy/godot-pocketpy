@@ -45,10 +45,10 @@ CLASS_TO_VARIANT_TYPE: dict[str, str] = {
     "Nil": "Variant::NIL",
 
     # atomic types
-    "bool": "Variant::BOOL",
-    "int": "Variant::INT",
-    "float": "Variant::FLOAT",
-    "String": "Variant::STRING",
+    # "bool": "Variant::BOOL",
+    # "int": "Variant::INT",
+    # "float": "Variant::FLOAT",
+    # "String": "Variant::STRING",
 
     # math types
     "Vector2": "Variant::VECTOR2",
