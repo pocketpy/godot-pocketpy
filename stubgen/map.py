@@ -203,7 +203,6 @@ def gen_typings_pyi_writers(gdt_all_in_one: GodotInOne):
     writer_v.write(
         """\
 from typing import overload, Literal, Any
-from .enums import *
 from .classes._Object import Object
 from . import alias
 
@@ -246,6 +245,7 @@ def default(gdt_expr: str) -> Any: ...
             writer.write(
         """\
 from typing import Literal, Callable as typing_Callable
+from ..enums import *
 from ._init import *
 
 """
@@ -551,7 +551,6 @@ from . import variants
 def gen_init_pyi_writer(gdt_all_in_one: GodotInOne, pyi_writer: Writer, global_variant_classes: list[str]) -> Writer:
     pyi_writer.write(
         """\
-from .enums import *
 from .header import *
 from . import classes
 
@@ -567,6 +566,9 @@ def load(path: str) -> classes.Resource: ...
 
     for clazz in global_variant_classes:
         writer.writefmt('from .variants import {0} as {0}', clazz)
+    writer.write('')
+
+    enum.gen_global_enums(pyi_writer, gdt_all_in_one.global_enums, with_types=False, with_values=True)
     return pyi_writer
 
 
@@ -577,7 +579,7 @@ from typing import Literal
 """
     )
     # --- global enum ---
-    enum.gen_global_enums(pyi_writer, gdt_all_in_one.global_enums)
+    enum.gen_global_enums(pyi_writer, gdt_all_in_one.global_enums, with_types=True, with_values=False)
     return pyi_writer
 
 
