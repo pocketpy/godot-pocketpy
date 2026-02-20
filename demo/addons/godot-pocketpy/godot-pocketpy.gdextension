@@ -5,61 +5,20 @@ compatibility_minimum = "4.4"
 reloadable = true
 
 [libraries]
-; Relative paths ensure that our GDExtension can be placed anywhere in the project directory.
-macos.single.debug = "bin/macos/libgodot-pocketpy.macos.template_debug.dylib"
-macos.double.debug = "bin/macos/libgodot-pocketpy.macos.template_debug.double.dylib"
-macos.single.release = "bin/macos/libgodot-pocketpy.macos.template_release.dylib"
-macos.double.release = "bin/macos/libgodot-pocketpy.macos.template_debug.double.dylib"
+macos.debug = "bin/macos/libgodot-pocketpy.macos.template_release.dylib"
+macos.release = "bin/macos/libgodot-pocketpy.macos.template_release.dylib"
 
-macos.arm64.single.debug = "bin/macos/libgodot-pocketpy.macos.template_debug.arm64.dylib"
-macos.arm64.double.debug = "bin/macos/libgodot-pocketpy.macos.template_debug.double.arm64.dylib"
-macos.arm64.single.release = "bin/macos/libgodot-pocketpy.macos.template_release.arm64.dylib"
-macos.arm64.double.release = "bin/macos/libgodot-pocketpy.macos.template_debug.double.arm64.dylib"
+macos.arm64.debug = "bin/macos/libgodot-pocketpy.macos.template_release.arm64.dylib"
+macos.arm64.release = "bin/macos/libgodot-pocketpy.macos.template_release.arm64.dylib"
 
-ios.arm64.single.debug = "bin/ios/libgodot-pocketpy.ios.template_debug.arm64.dylib"
-ios.arm64.double.debug = "bin/ios/libgodot-pocketpy.ios.template_debug.arm64.double.dylib"
-ios.arm64.single.release = "bin/ios/libgodot-pocketpy.ios.template_release.arm64.dylib"
-ios.arm64.double.release = "bin/ios/libgodot-pocketpy.ios.template_release.arm64.double.dylib"
+ios.arm64.debug = "bin/ios/libgodot-pocketpy.ios.template_release.arm64.dylib"
+ios.arm64.release = "bin/ios/libgodot-pocketpy.ios.template_release.arm64.dylib"
 
-windows.x86_32.single.debug = "bin/windows/godot-pocketpy.windows.template_debug.x86_32.dll"
-windows.x86_32.double.debug = "bin/windows/godot-pocketpy.windows.template_debug.x86_32.double.dll"
-windows.x86_32.single.release = "bin/windows/godot-pocketpy.windows.template_release.x86_32.dll"
-windows.x86_32.double.release = "bin/windows/godot-pocketpy.windows.template_release.x86_32.double.dll"
+windows.x86_64.debug = "bin/windows/godot-pocketpy.windows.template_release.x86_64.dll"
+windows.x86_64.release = "bin/windows/godot-pocketpy.windows.template_release.x86_64.dll"
 
-windows.x86_64.single.debug = "bin/windows/godot-pocketpy.windows.template_debug.x86_64.dll"
-windows.x86_64.double.debug = "bin/windows/godot-pocketpy.windows.template_debug.x86_64.double.dll"
-windows.x86_64.single.release = "bin/windows/godot-pocketpy.windows.template_release.x86_64.dll"
-windows.x86_64.double.release = "bin/windows/godot-pocketpy.windows.template_release.x86_64.double.dll"
-
-linux.x86_64.single.debug = "bin/linux/libgodot-pocketpy.linux.template_debug.x86_64.so"
-linux.x86_64.double.debug = "bin/linux/libgodot-pocketpy.linux.template_debug.x86_64.double.so"
-linux.x86_64.single.release = "bin/linux/libgodot-pocketpy.linux.template_release.x86_64.so"
-linux.x86_64.double.release = "bin/linux/libgodot-pocketpy.linux.template_release.x86_64.double.so"
-
-linux.arm64.single.debug = "bin/linux/libgodot-pocketpy.linux.template_debug.arm64.so"
-linux.arm64.double.debug = "bin/linux/libgodot-pocketpy.linux.template_debug.arm64.double.so"
-linux.arm64.single.release = "bin/linux/libgodot-pocketpy.linux.template_release.arm64.so"
-linux.arm64.double.release = "bin/linux/libgodot-pocketpy.linux.template_release.arm64.double.so"
-
-linux.rv64.single.debug = "bin/linux/libgodot-pocketpy.linux.template_debug.rv64.so"
-linux.rv64.double.debug = "bin/linux/libgodot-pocketpy.linux.template_debug.rv64.double.so"
-linux.rv64.single.release = "bin/linux/libgodot-pocketpy.linux.template_release.rv64.so"
-linux.rv64.double.release = "bin/linux/libgodot-pocketpy.linux.template_release.rv64.double.so"
-
-android.x86_64.single.debug = "bin/android/libgodot-pocketpy.android.template_debug.x86_64.so"
-android.x86_64.double.debug = "bin/android/libgodot-pocketpy.android.template_debug.x86_64.double.so"
-android.x86_64.single.release = "bin/android/libgodot-pocketpy.android.template_release.x86_64.so"
-android.x86_64.double.release = "bin/android/libgodot-pocketpy.android.template_release.x86_64.double.so"
-
-android.arm64.single.debug = "bin/android/libgodot-pocketpy.android.template_debug.arm64.so"
-android.arm64.double.debug = "bin/android/libgodot-pocketpy.android.template_debug.arm64.double.so"
-android.arm64.single.release = "bin/android/libgodot-pocketpy.android.template_release.arm64.so"
-android.arm64.double.release = "bin/android/libgodot-pocketpy.android.template_release.arm64.double.so"
-
-web.wasm32.single.debug = "bin/web/libgodot-pocketpy.web.template_debug.wasm32.nothreads.wasm"
-web.wasm32.double.debug = "bin/web/libgodot-pocketpy.web.template_release.wasm32.double.nothreads.wasm"
-web.wasm32.single.release = "bin/web/libgodot-pocketpy.web.template_release.wasm32.nothreads.wasm"
-web.wasm32.double.release = "bin/web/libgodot-pocketpy.web.template_release.wasm32.double.nothreads.wasm"
+android.arm64.debug = "bin/android/libgodot-pocketpy.android.template_release.arm64.so"
+android.arm64.release = "bin/android/libgodot-pocketpy.android.template_release.arm64.so"
 
 [icons]
 PythonScript = "PythonScript_icon.png"

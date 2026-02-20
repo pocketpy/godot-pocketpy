@@ -6,6 +6,10 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 # Build pocketpy
 option(PK_ENABLE_CUSTOM_SNAME "" ON)
 option(PK_BUILD_STATIC_LIB "" ON)
+option(PK_ENABLE_DETERMINISM "" ON)
+option(PK_BUILD_MODULE_LZ4 "" ON)
+option(PK_BUILD_MODULE_CUTE_PNG "" ON)
+option(PK_BUILD_MODULE_MSGPACK "" ON)
 add_subdirectory(pocketpy)
 
 ##############################################
