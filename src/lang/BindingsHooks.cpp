@@ -73,7 +73,16 @@ bool GDNativeClass_getattribute(py_Ref self, py_Name name) {
 		py_newstring(py_retval(), String(clazz));
 		return true;
 	}
-	String path = String(clazz) + "." + py_name2str(name);
+	// try int enum first
+	StringName sn = python_name_to_godot(name);
+	bool has_int_const = ClassDB::class_has_integer_constant(clazz, sn);
+	if (has_int_const) {
+		int64_t int_value = ClassDB::class_get_integer_constant(clazz, sn);
+		py_newint(py_retval(), int_value);
+		return true;
+	}
+	// try class constant
+	String path = String(clazz) + "." + sn;
 	auto ptr = pyctx()->class_constants.getptr(path);
 	if (ptr) {
 		py_newvariant(py_retval(), ptr);

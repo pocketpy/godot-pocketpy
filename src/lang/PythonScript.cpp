@@ -89,12 +89,12 @@ void *PythonScript::_instance_create(Object *for_object) const {
 		py_setdict(&ud->py, name, py_retval());
 	}
 	// call __init__
+	py_StackRef p0 = py_peek(0);
 	py_push(&ud->py);
 	bool ok = py_pushmethod(pyctx()->names.__init__);
 	if (!ok) {
 		py_pop();
 	} else {
-		py_StackRef p0 = py_peek(0);
 		if (!py_vectorcall(0, 0)) {
 			log_python_error_and_clearexc(p0);
 			return NULL;
