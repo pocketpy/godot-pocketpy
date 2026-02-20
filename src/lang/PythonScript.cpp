@@ -27,6 +27,9 @@ PythonScript::PythonScript() :
 
 PythonScript::~PythonScript() {
 	placeholders.erase(this);
+	if (meta.is_valid && !meta.class_name.is_empty()) {
+		known_classes.erase(meta.class_name);
+	}
 }
 
 bool PythonScript::_editor_can_reload_from_file() {
