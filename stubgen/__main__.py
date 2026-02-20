@@ -16,6 +16,10 @@ shutil.rmtree(TYPINGS_PATH, ignore_errors=True)
 shutil.copytree('pocketpy/include/typings', TYPINGS_PATH)
 os.mkdir(GODOT_TYPINGS_PATH)
 
+# create godot/scripts.pyi
+with open(f'{GODOT_TYPINGS_PATH}/scripts.pyi', 'w') as f:
+    pass
+
 export_writer(map_result.c_writer, 'src/lang/BindingsGenerated.cpp')
 
 for path, writer in map_result.pyi_writers.items():

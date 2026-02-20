@@ -12,6 +12,7 @@
 #include "godot_cpp/godot.hpp"
 #include "godot_cpp/variant/dictionary.hpp"
 #include "godot_cpp/variant/signal.hpp"
+#include <godot_cpp/classes/file_access.hpp>
 
 #include <stdlib.h>
 #include <thread>
@@ -133,12 +134,13 @@ Error PythonScript::_reload(bool keep_state) {
 			this,
 			(long long)std::hash<std::thread::id>()(tid));
 
-	// PythonContextLock lock;
 	if (tid != pyctx()->main_thread_id) {
-		py_switchvm(0);
 		WARN_PRINT("PythonScript.reload() must be called from the main thread!");
+		py_switchvm(0);
 		// return ERR_UNAVAILABLE;
 	}
+
+	PythonContextLock lock;
 
 	placeholder_fallback_enabled = true;
 	meta.is_valid = false;
@@ -153,6 +155,15 @@ Error PythonScript::_reload(bool keep_state) {
 	auto path_cstr = get_path().utf8();
 	String module_path = "godot.scripts." + basename;
 	auto module_path_cstr = module_path.utf8();
+	ctx->class_name = StringName(basename);
+
+	if(known_classes.has(ctx->class_name)){
+		String old_path = known_classes[ctx->class_name];
+		if(old_path != get_path()){
+			ERR_PRINT("Duplicate class name: " + String(ctx->class_name) + " has been defined in both " + old_path + " and " + get_path());
+			return ERR_COMPILATION_FAILED;
+		}
+	}
 
 	py_GlobalRef module = py_getmodule(module_path_cstr);
 	if (module == NULL) {
@@ -167,16 +178,19 @@ Error PythonScript::_reload(bool keep_state) {
 		return ERR_COMPILATION_FAILED;
 	}
 
-	ctx->class_name = StringName(basename);
 	py_Type exposed_type = tp_nil;
 	py_Name class_name = godot_name_to_python(ctx->class_name);
-	py_ItemRef exposed_class = py_getdict(module, class_name);
+	py_Ref exposed_class = py_getdict(module, class_name);
 	if (!exposed_class || !py_istype(exposed_class, tp_type)) {
 		ERR_PRINT("Failed to find class '" + ctx->class_name + "' in " + get_path());
 		return ERR_COMPILATION_FAILED;
 	}
 
 	exposed_type = py_totype(exposed_class);
+
+	// promote `exposed_class` variable from `py_ItemRef` into `py_GlobalRef`
+	exposed_class = py_tpobject(exposed_type);
+
 	Vector<DefineStatement *> defines;
 
 	std::pair<Vector<DefineStatement *> *, PythonScriptMeta *> ctx_pair = { &defines, &new_meta };
@@ -234,6 +248,11 @@ Error PythonScript::_reload(bool keep_state) {
 	meta = std::move(new_meta);
 
 	placeholder_fallback_enabled = false;
+
+	known_classes[ctx->class_name] = get_path();
+	if(!Engine::get_singleton()->is_editor_hint()){
+		py_setdict(pyctx()->godot_scripts, class_name, exposed_class);
+	}
 	return OK;
 }
 
@@ -420,5 +439,38 @@ void PythonScript::_update_placeholder_exports(void *placeholder) const {
 }
 
 HashMap<const PythonScript *, HashSet<void *>> PythonScript::placeholders;
+
+HashMap<StringName, String> PythonScript::known_classes;
+
+void PythonScript::rebuild_index_file() {
+	if(!Engine::get_singleton()->is_editor_hint()){
+		return;
+	}
+	String index_path = "res://addons/godot-pocketpy/typings/godot/scripts.pyi";
+	print_line("=> Rebuilding Python script index file: " + index_path);
+	Ref<FileAccess> file = FileAccess::open(index_path, FileAccess::WRITE);
+	if(!file.is_valid() || !file->is_open()) {
+		ERR_PRINT("Failed to open index file for writing: " + index_path);
+		return;
+	}
+	for (const auto &it : known_classes) {
+		StringName class_name = it.key;
+		String path = it.value;
+		if(!path.begins_with("res://") || !path.ends_with(".py")){
+			WARN_PRINT("Cannot build index due to invalid script path: " + path);
+			continue;
+		}
+		print_line(String("+ ") + class_name + ": " + path);
+		// res://scripts/quick_bar/QuickBarSlot.py
+		String stmt = path.replace("res://", "from ");
+		// from scripts/quick_bar/QuickBarSlot.py
+		stmt = stmt.replace(".py", String(" import ") + class_name + " as " + class_name);
+		// from scripts/quick_bar/QuickBarSlot import QuickBarSlot
+		stmt = stmt.replace("/", ".");
+		// from scripts.quick_bar.QuickBarSlot import QuickBarSlot as QuickBarSlot
+		file->store_line(stmt);
+	}
+	file->close();
+}
 
 } //namespace pkpy

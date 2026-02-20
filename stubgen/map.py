@@ -120,23 +120,6 @@ def fill_converters(gdt_all_in_one: GodotInOne):
     for clazz in gdt_all_in_one.singletons:
         converters.SINGLETON_CLASS_NAMES.add(clazz.name)
 
-def gen_header_pyi_writer(gdt_all_in_one: GodotInOne, pyi_writer: Writer) -> Writer:
-    pyi_writer.write(
-"""\
-from . import classes
-
-class PythonScriptInstance[T: classes.Object]:
-    owner: T
-
-def Extends[T: classes.Object](cls: type[T]) -> type[PythonScriptInstance[T]]: ...
-
-def export[T](cls: type[T], default=None) -> T: ...
-def export_range[T: int | float](min: T, max: T, step: T, default: T | None = None) -> T: ...
-def signal(*args: str) -> classes.Signal: ...
-"""
-    )
-    return pyi_writer
-
 def gen_c_writer(gdt_all_in_one: GodotInOne, c_writer: Writer) -> list[str]:
     global_variant_classes = []
 
@@ -559,9 +542,16 @@ from . import variants
 def gen_init_pyi_writer(gdt_all_in_one: GodotInOne, pyi_writer: Writer, global_variant_classes: list[str]) -> Writer:
     pyi_writer.write(
         """\
-from .header import *
 from . import classes
 
+class PythonScriptInstance[T: classes.Object]:
+    owner: T
+
+def Extends[T: classes.Object](cls: type[T]) -> type[PythonScriptInstance[T]]: ...
+
+def export[T](cls: type[T], default=None) -> T: ...
+def export_range[T: int | float](min: T, max: T, step: T, default: T | None = None) -> T: ...
+def signal(*args: str) -> classes.Signal: ...
 def load(path: str) -> classes.Resource: ...
 """
     )
@@ -597,7 +587,6 @@ def map_gdt_to_py(gdt_all_in_one: GodotInOne) -> MapResult:
         '__init__.pyi': Writer(),
         'alias.pyi': Writer(),
         'enums.pyi': Writer(),
-        'header.pyi': Writer(),
     })
 
     print('fill_converters')
@@ -606,8 +595,6 @@ def map_gdt_to_py(gdt_all_in_one: GodotInOne) -> MapResult:
     print("gen_c_writer")
     global_variant_classes = gen_c_writer(gdt_all_in_one, map_result.c_writer)
 
-    print('gen_header_pyi_writer')
-    gen_header_pyi_writer(gdt_all_in_one, map_result.pyi_writers['header.pyi'])
     print('gen_alias_pyi_writer')
     gen_alias_pyi_writer(gdt_all_in_one, map_result.pyi_writers['alias.pyi'])
     print('gen_enums_pyi_writer')

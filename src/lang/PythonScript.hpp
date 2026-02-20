@@ -85,6 +85,7 @@ public:
 	Variant _new(const Variant **args, GDExtensionInt arg_count, GDExtensionCallError &error);
 
 	PythonScriptMeta meta;
+	static void rebuild_index_file();
 
 protected:
 	static void _bind_methods();
@@ -98,6 +99,9 @@ protected:
 
 	// TODO: use instance member instead of static map if "_placeholder_instance_create" is changed to be non-const
 	static HashMap<const PythonScript *, HashSet<void *>> placeholders;
+
+private:
+	static HashMap<StringName, String> known_classes;
 };
 
 } //namespace pkpy

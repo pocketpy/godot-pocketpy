@@ -128,6 +128,7 @@ void setup_python_bindings() {
 
 	py_GlobalRef godot = pyctx()->godot = py_newmodule("godot");
 	pyctx()->godot_classes = py_newmodule("godot.classes");
+	pyctx()->godot_scripts = py_newmodule("godot.scripts");
 
 	py_bindfunc(py_getmodule("builtins"), "isinstance", godot_isinstance);
 

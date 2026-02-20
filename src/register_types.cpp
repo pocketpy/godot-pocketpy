@@ -3,8 +3,10 @@
 #include <gdextension_interface.h>
 #include <godot_cpp/core/defs.hpp>
 #include <godot_cpp/godot.hpp>
+#include <godot_cpp/classes/editor_plugin_registration.hpp>
 
 #include "lang/PythonScript.hpp"
+#include "lang/PythonEditorPlugin.hpp"
 #include "lang/PythonScriptResourceFormatLoader.hpp"
 #include "lang/PythonScriptResourceFormatSaver.hpp"
 #include "pocketpy.h"
@@ -13,37 +15,41 @@ using namespace godot;
 using namespace pkpy;
 
 static void initialize(ModuleInitializationLevel p_level) {
-	if (p_level != MODULE_INITIALIZATION_LEVEL_SCENE) {
-		return;
+	if (p_level == MODULE_INITIALIZATION_LEVEL_SCENE) {
+		printf("==> initializing pocketpy...\n");
+
+		py_initialize();
+
+		printf("==> registering pocketpy classes...\n");
+
+		ClassDB::register_abstract_class<PythonScript>();
+		ClassDB::register_abstract_class<PythonScriptLanguage>();
+		PythonScriptLanguage::get_or_create_singleton();
+		ClassDB::register_class<PythonScriptResourceFormatLoader>();
+		ClassDB::register_class<PythonScriptResourceFormatSaver>();
+		PythonScriptResourceFormatLoader::register_in_godot();
+		PythonScriptResourceFormatSaver::register_in_godot();
+
+		printf("==> pocketpy initialized.\n");
+	} else if (p_level == MODULE_INITIALIZATION_LEVEL_EDITOR) {
+		ClassDB::register_class<PythonEditorPlugin>();
+		EditorPlugins::add_by_type<PythonEditorPlugin>();
 	}
-
-	printf("==> initializing pocketpy...\n");
-
-	py_initialize();
-
-	printf("==> registering pocketpy classes...\n");
-
-	ClassDB::register_abstract_class<PythonScript>();
-	ClassDB::register_abstract_class<PythonScriptLanguage>();
-	PythonScriptLanguage::get_or_create_singleton();
-	ClassDB::register_class<PythonScriptResourceFormatLoader>();
-	ClassDB::register_class<PythonScriptResourceFormatSaver>();
-	PythonScriptResourceFormatLoader::register_in_godot();
-	PythonScriptResourceFormatSaver::register_in_godot();
 }
 
 static void uninitialize(ModuleInitializationLevel p_level) {
-	if (p_level != MODULE_INITIALIZATION_LEVEL_SCENE) {
-		return;
+	if (p_level == MODULE_INITIALIZATION_LEVEL_SCENE) {
+		printf("==> unregistering pocketpy classes...\n");
+		PythonScriptResourceFormatSaver::unregister_in_godot();
+		PythonScriptResourceFormatLoader::unregister_in_godot();
+		PythonScriptLanguage::delete_singleton();
+
+		printf("==> resetting pocketpy...\n");
+		py_resetallvm();
+		printf("==> pocketpy uninitialized.\n");
+	} else if (p_level == MODULE_INITIALIZATION_LEVEL_EDITOR) {
+		EditorPlugins::remove_by_type<PythonEditorPlugin>();
 	}
-
-	printf("==> unregistering pocketpy classes...\n");
-	PythonScriptResourceFormatSaver::unregister_in_godot();
-	PythonScriptResourceFormatLoader::unregister_in_godot();
-	PythonScriptLanguage::delete_singleton();
-
-	printf("==> resetting pocketpy...\n");
-	py_resetallvm();
 }
 
 extern "C" {

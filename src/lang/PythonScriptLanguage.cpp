@@ -86,13 +86,14 @@ TypedArray<Dictionary> PythonScriptLanguage::_get_built_in_templates(const Strin
 	node_template["description"] = "Node script template";
 	node_template["origin"] = 0;
 	node_template["content"] =
-R"(from godot import Extends, _BASE_CLASS_
+R"(from godot import *
+from godot.classes import _BASE_CLASS_
 
 class _CLASS_(Extends(_BASE_CLASS_)):
 	def _ready(self):
 		pass
 
-	def _process(self, delta):
+	def _process(self, delta: float):
 		pass
 )";
 
@@ -320,6 +321,7 @@ void PythonScriptLanguage::delete_singleton() {
 }
 
 void PythonScriptLanguage::_bind_methods() {
+	
 }
 
 PythonScriptLanguage *PythonScriptLanguage::instance = nullptr;
