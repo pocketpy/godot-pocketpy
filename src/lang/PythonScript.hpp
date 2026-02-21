@@ -86,6 +86,9 @@ public:
 
 	PythonScriptMeta meta;
 	static void rebuild_index_file();
+	static void dispose() {
+		known_classes.clear();
+	}
 
 protected:
 	static void _bind_methods();

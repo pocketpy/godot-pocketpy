@@ -5,6 +5,7 @@
 #include <godot_cpp/godot.hpp>
 #include <godot_cpp/classes/editor_plugin_registration.hpp>
 
+#include "lang/Common.hpp"
 #include "lang/PythonScript.hpp"
 #include "lang/PythonEditorPlugin.hpp"
 #include "lang/PythonScriptResourceFormatLoader.hpp"
@@ -44,8 +45,12 @@ static void uninitialize(ModuleInitializationLevel p_level) {
 		PythonScriptResourceFormatLoader::unregister_in_godot();
 		PythonScriptLanguage::delete_singleton();
 
-		printf("==> resetting pocketpy...\n");
-		py_resetallvm();
+		PythonScript::dispose();
+		printf("==> disposing contexts...\n");
+		dispose_contexts();
+
+		printf("==> finalizing pocketpy...\n");
+		py_finalize();
 		printf("==> pocketpy uninitialized.\n");
 	} else if (p_level == MODULE_INITIALIZATION_LEVEL_EDITOR) {
 		EditorPlugins::remove_by_type<PythonEditorPlugin>();

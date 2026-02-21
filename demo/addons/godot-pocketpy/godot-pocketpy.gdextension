@@ -2,7 +2,7 @@
 
 entry_symbol = "godot_pocketpy_library_init"
 compatibility_minimum = "4.4"
-reloadable = true
+reloadable = false
 
 [libraries]
 macos.debug = "bin/macos/libgodot-pocketpy.macos.template_release.dylib"

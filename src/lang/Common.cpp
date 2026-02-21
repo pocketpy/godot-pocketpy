@@ -4,6 +4,7 @@
 namespace pkpy {
 
 static PythonContext *_pyctx;
+static Vector<PythonThreadContext*> _thread_contexts;
 
 PythonContext *pyctx() {
 	if (!_pyctx) {
@@ -17,9 +18,21 @@ PythonThreadContext *pythreadctx() {
 	if (!ctx) {
 		PythonThreadContext *new_ctx = new PythonThreadContext();
 		py_setvmctx(new_ctx);
+		_thread_contexts.push_back(new_ctx);
 		return new_ctx;
 	}
 	return (PythonThreadContext *)ctx;
+}
+
+void dispose_contexts() {
+	if (_pyctx) {
+		delete _pyctx;
+		_pyctx = nullptr;
+	}
+	for (PythonThreadContext *ctx : _thread_contexts) {
+		delete ctx;
+	}
+	_thread_contexts.clear();
 }
 
 static_assert(sizeof(Variant) == sizeof(py_TValue));
