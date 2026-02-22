@@ -1,16 +1,16 @@
-[gd_scene load_steps=3 format=3 uid="uid://tudbnvddbxp6"]
+[gd_scene format=3 uid="uid://tudbnvddbxp6"]
 
 [ext_resource type="Script" uid="uid://dof0ku5rrw77i" path="res://new_script.gd" id="1_ig7tw"]
 [ext_resource type="Script" uid="uid://drm3k4ac6d87p" path="res://MyScript.py" id="2_0xm2m"]
 
-[node name="root" type="Node2D"]
+[node name="root" type="Node2D" unique_id=166675096]
 
-[node name="gds_node" type="Node" parent="." node_paths=PackedStringArray("y")]
+[node name="gds_node" type="Node" parent="." unique_id=1026672657 node_paths=PackedStringArray("y")]
 script = ExtResource("1_ig7tw")
 y = NodePath("../py_node")
 z = 4.8
 
-[node name="py_node" type="Node" parent="." node_paths=PackedStringArray("y")]
+[node name="py_node" type="Node" parent="." unique_id=420174823 node_paths=PackedStringArray("y")]
 script = ExtResource("2_0xm2m")
 z = 4.8
 y = NodePath("../gds_node")

@@ -13,6 +13,60 @@ namespace pkpy {
 
 void setup_bindings_generated();
 
+static bool call_next_for_coroutine(py_i64 id);
+
+static void call_next_for_coroutine_no_error(py_i64 id) {
+	py_Ref p0 = py_peek(0);
+	bool ok = call_next_for_coroutine(id);
+	if(!ok) log_python_error_and_clearexc(p0);
+}
+
+static bool call_next_for_coroutine(py_i64 id) {
+	std::thread::id current_thread_id = std::this_thread::get_id();
+	if (current_thread_id != pyctx()->main_thread_id) {
+		ERR_PRINT("coroutine can only be resumed in the main thread");
+		std::abort();
+	}
+	py_ItemRef gen = pythreadctx()->pending_coroutines.getptr(id);
+	if(gen == NULL) {
+		return RuntimeError("cannot find coroutine by id: %i", id);
+	}
+	int res = py_next(gen);
+	if(res == 1) {
+		if(py_retval()->type != pyctx()->tp_Variant) {
+			return TypeError("coroutine yielded value must be 'godot.Signal', got '%t'", py_typeof(py_retval()));
+		}
+		Variant v = to_variant_exact(py_retval());
+		if(v.get_type() != Variant::SIGNAL) {
+			CharString type_name = Variant::get_type_name(v.get_type()).utf8();
+			return TypeError("coroutine yielded value must be 'godot.Signal', got '%s'", type_name.get_data());
+		}
+		Signal signal = v;
+		Callable callable = callable_mp_static(call_next_for_coroutine_no_error);
+		signal.connect(callable.bind(id), Object::CONNECT_ONE_SHOT | Object::CONNECT_DEFERRED);
+		py_newnone(py_retval());
+		return true;
+	} else if (res == -1) {
+		pythreadctx()->pending_coroutines.erase(id);
+		return false;	// error
+	} else {
+		// generator finished
+		pythreadctx()->pending_coroutines.erase(id);
+		py_newnone(py_retval());
+		return true;
+	}
+}
+
+static void setup_awaitables() {
+	py_bindfunc(pyctx()->godot, "start_coroutine", [](int argc, py_Ref argv) -> bool {
+		PY_CHECK_ARGC(1);
+		PY_CHECK_ARG_TYPE(0, tp_generator);
+		py_i64 id = argv[0]._i64;
+		pythreadctx()->pending_coroutines[id] = argv[0];
+		return call_next_for_coroutine(id);
+	});
+}
+
 static void setup_exports() {
 	// export
 	pyctx()->tp_DefineStatement = py_newtype("_DefineStatement", tp_object, pyctx()->godot, [](void *ud) {
@@ -304,6 +358,9 @@ void setup_python_bindings() {
 #undef DEF_UNARY_OP
 
 	setup_bindings_generated();
+
+	setup_awaitables();
+
 	printf("==> setup_python_bindings() done!\n");
 }
 

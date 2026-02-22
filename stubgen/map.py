@@ -541,7 +541,7 @@ from . import variants
 
 def gen_init_pyi_writer(gdt_all_in_one: GodotInOne, pyi_writer: Writer, global_variant_classes: list[str]) -> Writer:
     pyi_writer.write(
-        """\
+        '''\
 from . import classes
 
 class PythonScriptInstance[T: classes.Object]:
@@ -553,7 +553,14 @@ def export[T](cls: type[T], default=None) -> T: ...
 def export_range[T: int | float](min: T, max: T, step: T, default: T | None = None) -> T: ...
 def signal(*args: str) -> classes.Signal: ...
 def load(path: str) -> classes.Resource: ...
-"""
+
+def start_coroutine(gen) -> None:
+    """Start a coroutine. The argument should be a `generator` object.
+
+    - To await a `godot.Signal`, use `yield your_signal`
+    - To await another coroutine, use `yield from another_coroutine()`
+    """
+'''
     )
 
     writer = pyi_writer

@@ -105,6 +105,7 @@ struct GDNativeClass {
 struct PythonThreadContext {
 	Vector<Callable> pending_callables;
 	Vector<std::pair<GDNativeClass, py_Name>> pending_nativecalls;
+	HashMap<py_i64, py_TValue> pending_coroutines;
 };
 
 struct DefineStatement {
