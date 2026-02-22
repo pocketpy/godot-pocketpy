@@ -266,6 +266,10 @@ Variant py_tovariant(py_Ref val) {
 			c11_vec3i v = py_tovec3i(val);
 			return Vector3i(v.x, v.y, v.z);
 		}
+		case tp_vec4i: {
+			c11_vec4i v = py_tovec4i(val);
+			return Vector4i(v.x, v.y, v.z, v.w);
+		}
 		case tp_color32: {
 			c11_color32 c = py_tocolor32(val);
 			float r = c.r / 255.0f;

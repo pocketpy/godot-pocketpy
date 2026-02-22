@@ -386,6 +386,7 @@ append_records(ALIAS_CLASS_DATA, [
     {"cls_name": "Vector2i",    "alternative_cls_name": "vec2i",    "module_abs_path": "vmath"},
     {"cls_name": "Vector3",     "alternative_cls_name": "vec3",     "module_abs_path": "vmath"},
     {"cls_name": "Vector3i",    "alternative_cls_name": "vec3i",    "module_abs_path": "vmath"},
+    {"cls_name": "Vector4i",    "alternative_cls_name": "vec4i",    "module_abs_path": "vmath"},
     {"cls_name": "Color",       "alternative_cls_name": "color32",  "module_abs_path": "vmath"},
     {"cls_name": "NodePath",    "alternative_cls_name": "str",      "module_abs_path": ""},
     {"cls_name": "StringName",  "alternative_cls_name": "str",      "module_abs_path": ""},
