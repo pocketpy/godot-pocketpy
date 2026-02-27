@@ -46,28 +46,58 @@ struct PythonScriptReloadingContext {
 };
 
 struct InternalArguments {
-	Vector<Variant> _args;
-	Vector<GDExtensionConstVariantPtr> _pointers;
+	union {
+		struct {
+			Vector<Variant> _args;
+			Vector<GDExtensionConstVariantPtr> _pointers;
+		} dyn;
 
-	inline void reset() {
-		_args.clear();
-		_pointers.clear();
+		struct {
+			Variant _args[4];
+			GDExtensionConstVariantPtr _pointers[4];
+		} stc;
+	};
+
+	int length;
+
+	InternalArguments(int length) : length(length) {
+		if (length > 4) {
+			dyn._args.resize(length);
+			dyn._pointers.resize(length);
+			for (int i = 0; i < length; i++) {
+				dyn._pointers.write[i] = &dyn._args[i];
+			}
+		} else {
+			for (int i = 0; i < length; i++) {
+				stc._pointers[i] = &stc._args[i];
+			}
+		}
 	}
 
-	inline void append(const Variant &v) {
-		_args.push_back(v);
+	~InternalArguments() {
+		if (length > 4) {
+			using DynType = decltype(dyn);
+			dyn.~DynType();
+		} else {
+			using StcType = decltype(stc);
+			stc.~StcType();
+		}
+	}
+
+	inline void set(int index, const Variant &val) {
+		if (length > 4) {
+			dyn._args.write[index] = val;
+		} else {
+			stc._args[index] = val;
+		}
 	}
 
 	inline const GDExtensionConstVariantPtr *ptr() {
-		_pointers.resize(_args.size());
-		for (int i = 0; i < _args.size(); i++) {
-			_pointers.write[i] = &_args[i];
-		}
-		return _pointers.ptr();
+		return length > 4 ? dyn._pointers.ptr() : stc._pointers;
 	}
 
 	inline int size() const {
-		return (int)_args.size();
+		return length;
 	}
 };
 

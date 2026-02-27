@@ -107,13 +107,13 @@ bool GDNativeClass_getunboundmethod(py_Ref self, py_Name name) {
 				Variant res = ClassDB::instantiate(clazz);
 				py_newvariant(py_retval(), &res);
 			} else {
-				InternalArguments arguments;
+				InternalArguments args(argc - 1);
 				for (int i = 1; i < argc; i++) {
-					arguments.append(py_tovariant(&argv[i]));
+					args.set(i - 1, py_tovariant(&argv[i]));
 				}
 				Variant r_ret;
 				GDExtensionCallError r_error;
-				internal::gdextension_interface_variant_construct((GDExtensionVariantType)p->type, &r_ret, arguments.ptr(), arguments.size(), &r_error);
+				internal::gdextension_interface_variant_construct((GDExtensionVariantType)p->type, &r_ret, args.ptr(), args.size(), &r_error);
 				if (!handle_gde_call_error(r_error)) {
 					return false;
 				}
@@ -130,24 +130,24 @@ bool GDNativeClass_getunboundmethod(py_Ref self, py_Name name) {
 		std::pair<GDNativeClass, py_Name> pair = stack->operator[](last_idx);
 		stack->remove_at(last_idx);
 
-		InternalArguments args;
-
 		Variant r_ret;
 		GDExtensionCallError r_error;
 		StringName method = python_name_to_godot(pair.second);
 		if (pair.first.type == Variant::OBJECT) {
-			args.append(python_name_to_godot(pair.first.name));
-			args.append(method);
+			InternalArguments args(2 + argc - 1);
+			args.set(0, python_name_to_godot(pair.first.name));
+			args.set(1, method);
 			for (int i = 1; i < argc; i++) {
-				args.append(py_tovariant(&argv[i]));
+				args.set(i + 1, py_tovariant(&argv[i]));
 			}
 			ClassDBSingleton *singleton = ClassDBSingleton::get_singleton();
 			static GDExtensionMethodBindPtr _gde_method_bind = internal::gdextension_interface_classdb_get_method_bind(singleton->get_class_static()._native_ptr(), StringName("class_call_static")._native_ptr(), 3344196419);
 			CHECK_METHOD_BIND_RET(_gde_method_bind, (Variant()));
 			internal::gdextension_interface_object_method_bind_call(_gde_method_bind, singleton->_owner, args.ptr(), args.size(), &r_ret, &r_error);
 		} else {
+			InternalArguments args(argc - 1);
 			for (int i = 1; i < argc; i++) {
-				args.append(py_tovariant(&argv[i]));
+				args.set(i - 1, py_tovariant(&argv[i]));
 			}
 			godot::internal::gdextension_interface_variant_call_static(
 					(GDExtensionVariantType)pair.first.type, &method, args.ptr(), args.size(), &r_ret, &r_error);
