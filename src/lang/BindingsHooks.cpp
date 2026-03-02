@@ -41,30 +41,77 @@ bool Variant_setattribute(py_Ref self, py_Name name, py_Ref value) {
 	return true;
 }
 
-bool Variant_getunboundmethod(py_Ref self, py_Name name) {
-	Variant v = to_variant_exact(self);
+static bool Variant_getunboundmethod_pybind(int argc, py_Ref argv) {
+	py_Ref f = py_inspect_currentfunction();
+	if (f == NULL || f->type != tp_nativefunc) {
+		return RuntimeError("Variant_getunboundmethod(): cannot get current function");
+	}
+	py_CFunction inner_func = *(py_CFunction *)f->_chars;
+	if (inner_func != Variant_getunboundmethod_pybind) {
+		return RuntimeError("Variant_getunboundmethod(): current function mismatch");
+	}
+
+	py_Name name;
+	memcpy(&name, f->_chars + sizeof(py_CFunction), sizeof(py_Name));
+	static_assert(sizeof(py_CFunction) + sizeof(py_Name) <= sizeof(f->_chars));
+
+	Variant v = to_variant_exact(&argv[0]);
 	StringName name_sn = python_name_to_godot(name);
 	bool r_valid;
-	Variant res = v.get_named(python_name_to_godot(name), r_valid);
+	Variant named_variant = v.get_named(name_sn, r_valid);
+
 	if (r_valid) {
-		if (res.get_type() == Variant::CALLABLE) {
-			pythreadctx()->pending_callables.append(res.operator Callable());
-			py_newnativefunc(py_retval(), [](int argc, py_Ref argv) {
-				Vector<Callable> *stack = &pythreadctx()->pending_callables;
+		Callable callable = named_variant;
+		Variant res;
+		Variant stack_args[4];
+		switch(argc - 1) {
+			case 0: {
+				res = callable.call();
+				break;
+			}
+			case 1:
+				stack_args[0] = py_tovariant(&argv[1]);
+				res = callable.call(stack_args[0]);
+				break;
+			case 2:
+				stack_args[0] = py_tovariant(&argv[1]);
+				stack_args[1] = py_tovariant(&argv[2]);
+				res = callable.call(stack_args[0], stack_args[1]);
+				break;
+			case 3:
+				stack_args[0] = py_tovariant(&argv[1]);
+				stack_args[1] = py_tovariant(&argv[2]);
+				stack_args[2] = py_tovariant(&argv[3]);
+				res = callable.call(stack_args[0], stack_args[1], stack_args[2]);
+				break;
+			case 4:
+				stack_args[0] = py_tovariant(&argv[1]);
+				stack_args[1] = py_tovariant(&argv[2]);
+				stack_args[2] = py_tovariant(&argv[3]);
+				stack_args[3] = py_tovariant(&argv[4]);
+				res = callable.call(stack_args[0], stack_args[1], stack_args[2], stack_args[3]);
+				break;
+			default: {
 				Array godot_args;
 				for (int i = 1; i < argc; i++) {
-					godot_args.push_back(py_tovariant(&argv[i]));
+					godot_args.append(py_tovariant(&argv[i]));
 				}
-				int last_idx = (int)stack->size() - 1;
-				Variant res = stack->operator[](last_idx).callv(godot_args);
-				stack->remove_at(last_idx);
-				py_newvariant(py_retval(), &res);
-				return true;
-			});
-			return true;
+				res = callable.callv(godot_args);
+				break;
+			}
 		}
+		return true;
+	} else {
+		return AttributeError(&argv[0], name);
 	}
-	return false;
+}
+
+bool Variant_getunboundmethod(py_Ref self, py_Name name) {
+	py_OutRef out = py_retval();
+	py_newnativefunc(out, Variant_getunboundmethod_pybind);
+	char* p_sn = out->_chars + sizeof(py_CFunction);
+	memcpy(p_sn, &name, sizeof(py_Name));
+	return true;
 }
 
 bool GDNativeClass_getattribute(py_Ref self, py_Name name) {
@@ -92,50 +139,51 @@ bool GDNativeClass_getattribute(py_Ref self, py_Name name) {
 			godot_name_to_python(clazz), name);
 }
 
-bool GDNativeClass_getunboundmethod(py_Ref self, py_Name name) {
-	GDNativeClass *p = (GDNativeClass *)py_totrivial(self);
-	if (name == pyctx()->names.__call__) {
-		py_newnativefunc(py_retval(), [](int argc, py_Ref argv) -> bool {
-			GDNativeClass *p = (GDNativeClass *)py_totrivial(argv);
-			StringName clazz = python_name_to_godot(p->name);
-
-			if (p->type == Variant::OBJECT) {
-				PY_CHECK_ARGC(1);
-				if (!ClassDB::can_instantiate(clazz)) {
-					return TypeError("cannot instantiate class '%n'", p->name);
-				}
-				Variant res = ClassDB::instantiate(clazz);
-				py_newvariant(py_retval(), &res);
-			} else {
-				InternalArguments args(argc - 1);
-				for (int i = 1; i < argc; i++) {
-					args.set(i - 1, py_tovariant(&argv[i]));
-				}
-				Variant r_ret;
-				GDExtensionCallError r_error;
-				internal::gdextension_interface_variant_construct((GDExtensionVariantType)p->type, &r_ret, args.ptr(), args.size(), &r_error);
-				if (!handle_gde_call_error(r_error)) {
-					return false;
-				}
-				py_newvariant(py_retval(), &r_ret);
-			}
-			return true;
-		});
-		return true;
+static bool GDNativeClass_getunboundmethod_pybind(int argc, py_Ref argv) {
+	py_Ref f = py_inspect_currentfunction();
+	if (f == NULL || f->type != tp_nativefunc) {
+		return RuntimeError("GDNativeClass_getunboundmethod(): cannot get current function");
 	}
-	pythreadctx()->pending_nativecalls.append(std::make_pair(*p, name));
-	py_newnativefunc(py_retval(), [](int argc, py_Ref argv) -> bool {
-		Vector<std::pair<GDNativeClass, py_Name>> *stack = &pythreadctx()->pending_nativecalls;
-		int last_idx = (int)stack->size() - 1;
-		std::pair<GDNativeClass, py_Name> pair = stack->operator[](last_idx);
-		stack->remove_at(last_idx);
+	py_CFunction inner_func = *(py_CFunction *)f->_chars;
+	if (inner_func != GDNativeClass_getunboundmethod_pybind) {
+		return RuntimeError("GDNativeClass_getunboundmethod(): current function mismatch");
+	}
 
+	py_Name name;
+	memcpy(&name, f->_chars + sizeof(py_CFunction), sizeof(py_Name));
+	static_assert(sizeof(py_CFunction) + sizeof(py_Name) <= sizeof(f->_chars));
+
+	GDNativeClass* p_gdn = (GDNativeClass*)py_totrivial(&argv[0]);
+
+	if (name == pyctx()->names.__call__) {
+		if (p_gdn->type == Variant::OBJECT) {
+			StringName clazz = python_name_to_godot(p_gdn->name);
+			PY_CHECK_ARGC(1);
+			if (!ClassDB::can_instantiate(clazz)) {
+				return TypeError("cannot instantiate class '%n'", p_gdn->name);
+			}
+			Variant res = ClassDB::instantiate(clazz);
+			py_newvariant(py_retval(), &res);
+		} else {
+			InternalArguments args(argc - 1);
+			for (int i = 1; i < argc; i++) {
+				args.set(i - 1, py_tovariant(&argv[i]));
+			}
+			Variant r_ret;
+			GDExtensionCallError r_error;
+			internal::gdextension_interface_variant_construct((GDExtensionVariantType)p_gdn->type, &r_ret, args.ptr(), args.size(), &r_error);
+			if (!handle_gde_call_error(r_error)) {
+				return false;
+			}
+			py_newvariant(py_retval(), &r_ret);
+		}
+	} else {
 		Variant r_ret;
 		GDExtensionCallError r_error;
-		StringName method = python_name_to_godot(pair.second);
-		if (pair.first.type == Variant::OBJECT) {
+		StringName method = python_name_to_godot(name);
+		if (p_gdn->type == Variant::OBJECT) {
 			InternalArguments args(2 + argc - 1);
-			args.set(0, python_name_to_godot(pair.first.name));
+			args.set(0, python_name_to_godot(p_gdn->name));
 			args.set(1, method);
 			for (int i = 1; i < argc; i++) {
 				args.set(i + 1, py_tovariant(&argv[i]));
@@ -150,14 +198,22 @@ bool GDNativeClass_getunboundmethod(py_Ref self, py_Name name) {
 				args.set(i - 1, py_tovariant(&argv[i]));
 			}
 			godot::internal::gdextension_interface_variant_call_static(
-					(GDExtensionVariantType)pair.first.type, &method, args.ptr(), args.size(), &r_ret, &r_error);
+					(GDExtensionVariantType)p_gdn->type, &method, args.ptr(), args.size(), &r_ret, &r_error);
 		}
 		if (!handle_gde_call_error(r_error)) {
 			return false;
 		}
 		py_newvariant(py_retval(), &r_ret);
-		return true;
-	});
+	}
+
+	return true;
+}
+
+bool GDNativeClass_getunboundmethod(py_Ref self, py_Name name) {
+	py_OutRef out = py_retval();
+	py_newnativefunc(out, GDNativeClass_getunboundmethod_pybind);
+	char* p_sn = out->_chars + sizeof(py_CFunction);
+	memcpy(p_sn, &name, sizeof(py_Name));
 	return true;
 }
 

@@ -4,7 +4,6 @@
 namespace pkpy {
 
 static PythonContext *_pyctx;
-static Vector<PythonThreadContext*> _thread_contexts;
 
 PythonContext *pyctx() {
 	if (!_pyctx) {
@@ -13,26 +12,11 @@ PythonContext *pyctx() {
 	return _pyctx;
 }
 
-PythonThreadContext *pythreadctx() {
-	void *ctx = py_getvmctx();
-	if (!ctx) {
-		PythonThreadContext *new_ctx = new PythonThreadContext();
-		py_setvmctx(new_ctx);
-		_thread_contexts.push_back(new_ctx);
-		return new_ctx;
-	}
-	return (PythonThreadContext *)ctx;
-}
-
 void dispose_contexts() {
 	if (_pyctx) {
 		delete _pyctx;
 		_pyctx = nullptr;
 	}
-	for (PythonThreadContext *ctx : _thread_contexts) {
-		delete ctx;
-	}
-	_thread_contexts.clear();
 }
 
 static_assert(sizeof(Variant) == sizeof(py_TValue));
@@ -297,9 +281,6 @@ void log_python_error_and_clearexc(py_StackRef p0) {
 	print_error(String(msg));
 	PK_FREE(msg);
 	py_clearexc(p0);
-
-	pythreadctx()->pending_callables.clear();
-	pythreadctx()->pending_nativecalls.clear();
 }
 
 } // namespace pkpy

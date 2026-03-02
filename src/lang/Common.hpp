@@ -133,9 +133,7 @@ struct GDNativeClass {
 };
 
 struct PythonThreadContext {
-	Vector<Callable> pending_callables;
-	Vector<std::pair<GDNativeClass, py_Name>> pending_nativecalls;
-	HashMap<py_i64, py_TValue> pending_coroutines;
+	HashMap<void*, py_TValue> pending_coroutines;
 };
 
 struct DefineStatement {
@@ -175,7 +173,6 @@ struct SignalStatement : DefineStatement {
 };
 
 PythonContext *pyctx();
-PythonThreadContext *pythreadctx();
 
 void log_python_error_and_clearexc(py_StackRef p0);
 

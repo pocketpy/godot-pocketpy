@@ -215,9 +215,11 @@ void PythonScriptInstance::gc_mark_instances(void (*f)(py_Ref val, void *ctx), v
 	for (auto &kv : known_instances) {
 		PythonScriptInstance *instance = kv.value;
 		f(&instance->py, ctx);
-	}
-	for(auto &kv: pythreadctx()->pending_coroutines) {
-		f(&kv.value, ctx);
+
+		for(auto &c_kv: instance->coroutines) {
+			py_Ref coroutine = c_kv.value;
+			f(coroutine, ctx);
+		}
 	}
 }
 
