@@ -7,10 +7,11 @@
 
 #include "lang/Common.hpp"
 #include "lang/PythonScript.hpp"
+#include "lang/PythonScriptLanguage.hpp"
 #include "lang/PythonEditorPlugin.hpp"
 #include "lang/PythonScriptResourceFormatLoader.hpp"
 #include "lang/PythonScriptResourceFormatSaver.hpp"
-#include "pocketpy.h"
+
 
 using namespace godot;
 using namespace pkpy;

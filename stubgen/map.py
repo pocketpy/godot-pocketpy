@@ -547,19 +547,24 @@ from . import classes
 class PythonScriptInstance[T: classes.Object]:
     owner: T
 
+    def __new__(cls) -> T: ...
+
+    def start_coroutine(self, gen) -> int:
+        """Start a coroutine. The argument should be a `generator` object.
+
+        - To await a `godot.Signal`, use `yield your_signal`
+        - To await another coroutine, use `yield from another_coroutine()`
+        """
+
+    def stop_coroutine(self, id: int) -> bool: ...
+    def stop_all_coroutines(self) -> None: ...
+
 def Extends[T: classes.Object](cls: type[T]) -> type[PythonScriptInstance[T]]: ...
 
 def export[T](cls: type[T], default=None) -> T: ...
 def export_range[T: int | float](min: T, max: T, step: T, default: T | None = None) -> T: ...
 def signal(*args: str) -> classes.Signal: ...
 def load(path: str) -> classes.Resource: ...
-
-def start_coroutine(gen) -> None:
-    """Start a coroutine. The argument should be a `generator` object.
-
-    - To await a `godot.Signal`, use `yield your_signal`
-    - To await another coroutine, use `yield from another_coroutine()`
-    """
 '''
     )
 

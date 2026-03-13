@@ -1,15 +1,13 @@
 #pragma once
 
+#include "godot_cpp/variant/packed_string_array.hpp"
 #include "godot_cpp/classes/gd_script.hpp"
 #include <godot_cpp/classes/script_extension.hpp>
 #include <godot_cpp/templates/hash_map.hpp>
 #include <godot_cpp/templates/hash_set.hpp>
 
+#include "Common.hpp"
 #include "PythonScriptLanguage.hpp"
-#include "godot_cpp/variant/packed_string_array.hpp"
-#include "pocketpy.h"
-
-#include <atomic>
 
 using namespace godot;
 
@@ -85,9 +83,13 @@ public:
 	Variant _new(const Variant **args, GDExtensionInt arg_count, GDExtensionCallError &error);
 
 	PythonScriptMeta meta;
+
 	static void rebuild_index_file();
+	static HashMap<py_Type, PythonScript *> runtime_type_to_script;
+
 	static void dispose() {
 		known_classes.clear();
+		runtime_type_to_script.clear();
 	}
 
 protected:
@@ -105,6 +107,7 @@ protected:
 
 private:
 	static HashMap<StringName, String> known_classes;
+	
 };
 
 } //namespace pkpy
