@@ -195,4 +195,11 @@ struct PythonContextLock {
 	}
 };
 
+struct IdGenerator {
+	using T = py_i64;
+	T _counter;
+	IdGenerator() : _counter(1) {}
+	T next() { return _counter++; }
+};
+
 } // namespace pkpy

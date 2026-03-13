@@ -217,8 +217,7 @@ void PythonScriptInstance::gc_mark_instances(void (*f)(py_Ref val, void *ctx), v
 		f(&instance->py, ctx);
 
 		for(auto &c_kv: instance->coroutines) {
-			py_Ref coroutine = c_kv.value;
-			f(coroutine, ctx);
+			f(&c_kv.value, ctx);
 		}
 	}
 }

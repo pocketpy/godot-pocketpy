@@ -1,6 +1,7 @@
 #pragma once
 
 #include "PythonScript.hpp"
+#include "Common.hpp"
 #include <godot_cpp/classes/ref.hpp>
 #include <godot_cpp/templates/hash_map.hpp>
 #include "pocketpy.h"
@@ -18,12 +19,16 @@ struct PythonScriptInstance {
 
 	Object *owner;
 	Ref<PythonScript> script;
-	py_TValue py;
-	HashSet<void*, py_TValue> coroutines;
 
+	py_TValue py;
+
+	IdGenerator coroutine_id_gen;
+	HashMap<IdGenerator::T, py_TValue> coroutines;
+	
 	static void gc_mark_instances(void (*f)(py_Ref val, void *ctx), void *ctx);
 
 private:
+	// Node -> PythonScriptInstance
 	static HashMap<Object *, PythonScriptInstance *> known_instances;
 };
 

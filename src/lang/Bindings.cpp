@@ -13,24 +13,32 @@ namespace pkpy {
 
 void setup_bindings_generated();
 
-static bool call_next_for_coroutine(void* id);
+static bool call_next_for_coroutine(Object* owner, IdGenerator::T id);
 
-static void call_next_for_coroutine_no_error(void* id) {
+static void call_next_for_coroutine_no_error(Object* owner, IdGenerator::T id) {
 	py_Ref p0 = py_peek(0);
-	bool ok = call_next_for_coroutine(id);
+	bool ok = call_next_for_coroutine(owner, id);
 	if(!ok) log_python_error_and_clearexc(p0);
 }
 
-static bool call_next_for_coroutine(void* id) {
+static bool call_next_for_coroutine(Object* owner, IdGenerator::T id) {
 	std::thread::id current_thread_id = std::this_thread::get_id();
 	if (current_thread_id != pyctx()->main_thread_id) {
 		ERR_PRINT("coroutine can only be resumed in the main thread");
 		std::abort();
 	}
-	py_ItemRef gen = pythreadctx()->pending_coroutines.getptr(id);
-	if(gen == NULL) {
-		return RuntimeError("cannot find coroutine by id: %p", id);
+
+	PythonScriptInstance *instance = PythonScriptInstance::attached_to_object(owner);
+	if(instance == NULL) {
+		py_newnone(py_retval());
+		return true;
 	}
+	py_ItemRef gen = instance->coroutines.getptr(id);
+	if(gen == NULL) {
+		py_newnone(py_retval());
+		return true;
+	}
+
 	int res = py_next(gen);
 	if(res == 1) {
 		if(py_retval()->type != pyctx()->tp_Variant) {
@@ -47,23 +55,42 @@ static bool call_next_for_coroutine(void* id) {
 		py_newnone(py_retval());
 		return true;
 	} else if (res == -1) {
-		pythreadctx()->pending_coroutines.erase(id);
+		instance->coroutines.erase(id);
 		return false;	// error
 	} else {
 		// generator finished
-		pythreadctx()->pending_coroutines.erase(id);
+		instance->coroutines.erase(id);
 		py_newnone(py_retval());
 		return true;
 	}
 }
 
 static void setup_awaitables() {
-	py_bindfunc(pyctx()->godot, "start_coroutine", [](int argc, py_Ref argv) -> bool {
+	py_bindmethod(pyctx()->tp_Script, "start_coroutine", [](int argc, py_Ref argv) -> bool {
+		PY_CHECK_ARGC(2);
+		PY_CHECK_ARG_TYPE(1, tp_generator);
+		PythonScriptInstance *instance = (PythonScriptInstance *)py_touserdata(argv);
+		IdGenerator::T id = instance->coroutine_id_gen.next();
+		instance->coroutines.insert(id, argv[1]);
+		return call_next_for_coroutine(instance->owner, id);
+	});
+
+	py_bindmethod(pyctx()->tp_Script, "stop_coroutine", [](int argc, py_Ref argv) -> bool {
+		PY_CHECK_ARGC(2);
+		PY_CHECK_ARG_TYPE(1, tp_int);
+		PythonScriptInstance *instance = (PythonScriptInstance *)py_touserdata(argv);
+		IdGenerator::T id = (IdGenerator::T)py_toint(&argv[1]);
+		bool removed = instance->coroutines.erase(id);
+		py_newbool(py_retval(), removed);
+		return true;
+	});
+
+	py_bindmethod(pyctx()->tp_Script, "stop_all_coroutines", [](int argc, py_Ref argv) -> bool {
 		PY_CHECK_ARGC(1);
-		PY_CHECK_ARG_TYPE(0, tp_generator);
-		void* id = argv[0]._obj;
-		pythreadctx()->pending_coroutines[id] = argv[0];
-		return call_next_for_coroutine(id);
+		PythonScriptInstance *instance = (PythonScriptInstance *)py_touserdata(argv);
+		instance->coroutines.clear();
+		py_newnone(py_retval());
+		return true;
 	});
 }
 
