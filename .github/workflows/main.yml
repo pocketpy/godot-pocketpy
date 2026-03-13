@@ -23,6 +23,17 @@ jobs:
     - uses: actions/setup-python@v5
       with:
         python-version: '3.10'
+    - name: Get godot-cpp commit hash
+      id: godot-cpp-hash
+      shell: bash
+      run: echo "hash=$(git rev-parse HEAD:godot-cpp)" >> $GITHUB_OUTPUT
+    - name: Cache godot-cpp build
+      uses: actions/cache@v4
+      with:
+        path: ${{ github.workspace }}/build
+        key: ${{ runner.os }}-godot-cpp-win32-Release-${{ steps.godot-cpp-hash.outputs.hash }}
+        restore-keys: |
+          ${{ runner.os }}-godot-cpp-win32-Release-
     - name: Compile
       shell: bash
       run: |
@@ -42,6 +53,16 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.10'
+      - name: Get godot-cpp commit hash
+        id: godot-cpp-hash
+        run: echo "hash=$(git rev-parse HEAD:godot-cpp)" >> $GITHUB_OUTPUT
+      - name: Cache godot-cpp build
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/build
+          key: ${{ runner.os }}-godot-cpp-macos-Release-${{ steps.godot-cpp-hash.outputs.hash }}
+          restore-keys: |
+            ${{ runner.os }}-godot-cpp-macos-Release-
       - name: Compile
         run: |
           python -m pip install pandas
@@ -66,6 +87,16 @@ jobs:
           ndk-version: r23
           local-cache: false
           add-to-path: false
+      - name: Get godot-cpp commit hash
+        id: godot-cpp-hash
+        run: echo "hash=$(git rev-parse HEAD:godot-cpp)" >> $GITHUB_OUTPUT
+      - name: Cache godot-cpp build
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/build
+          key: ${{ runner.os }}-godot-cpp-android-Release-${{ steps.godot-cpp-hash.outputs.hash }}
+          restore-keys: |
+            ${{ runner.os }}-godot-cpp-android-Release-
       - name: Compile
         run: |
           python -m pip install pandas
@@ -86,6 +117,16 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.10'
+      - name: Get godot-cpp commit hash
+        id: godot-cpp-hash
+        run: echo "hash=$(git rev-parse HEAD:godot-cpp)" >> $GITHUB_OUTPUT
+      - name: Cache godot-cpp build
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/build
+          key: ${{ runner.os }}-godot-cpp-ios-Release-${{ steps.godot-cpp-hash.outputs.hash }}
+          restore-keys: |
+            ${{ runner.os }}-godot-cpp-ios-Release-
       - name: Compile
         run: |
           python -m pip install pandas
