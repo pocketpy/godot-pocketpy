@@ -3,6 +3,19 @@
 
 namespace pkpy {
 
+static void new_nativefunc_with_name(py_OutRef out, py_CFunction func, py_Name name) {
+	py_newnativefunc(out, func);
+	char* p_sn = out->_chars + sizeof(py_CFunction);
+	memcpy(p_sn, &name, sizeof(py_Name));
+	static_assert(sizeof(py_CFunction) + sizeof(py_Name) <= sizeof(out->_chars));
+}
+
+static py_Name parse_name_from_nativefunc(py_Ref f) {
+	py_Name name;
+	memcpy(&name, f->_chars + sizeof(py_CFunction), sizeof(py_Name));
+	return name;
+}
+
 bool Variant_getattribute(py_Ref self, py_Name name) {
 	Variant v = to_variant_exact(self);
 	if (v.get_type() == Variant::OBJECT) {
@@ -51,9 +64,7 @@ static bool Variant_getunboundmethod_pybind(int argc, py_Ref argv) {
 		return RuntimeError("Variant_getunboundmethod(): current function mismatch");
 	}
 
-	py_Name name;
-	memcpy(&name, f->_chars + sizeof(py_CFunction), sizeof(py_Name));
-	static_assert(sizeof(py_CFunction) + sizeof(py_Name) <= sizeof(f->_chars));
+	py_Name name = parse_name_from_nativefunc(f);
 
 	Variant v = to_variant_exact(&argv[0]);
 	StringName name_sn = python_name_to_godot(name);
@@ -109,9 +120,7 @@ static bool Variant_getunboundmethod_pybind(int argc, py_Ref argv) {
 
 bool Variant_getunboundmethod(py_Ref self, py_Name name) {
 	py_OutRef out = py_retval();
-	py_newnativefunc(out, Variant_getunboundmethod_pybind);
-	char* p_sn = out->_chars + sizeof(py_CFunction);
-	memcpy(p_sn, &name, sizeof(py_Name));
+	new_nativefunc_with_name(out, Variant_getunboundmethod_pybind, name);
 	return true;
 }
 
@@ -150,9 +159,7 @@ static bool GDNativeClass_getunboundmethod_pybind(int argc, py_Ref argv) {
 		return RuntimeError("GDNativeClass_getunboundmethod(): current function mismatch");
 	}
 
-	py_Name name;
-	memcpy(&name, f->_chars + sizeof(py_CFunction), sizeof(py_Name));
-	static_assert(sizeof(py_CFunction) + sizeof(py_Name) <= sizeof(f->_chars));
+	py_Name name = parse_name_from_nativefunc(f);
 
 	GDNativeClass* p_gdn = (GDNativeClass*)py_totrivial(&argv[0]);
 
@@ -212,9 +219,7 @@ static bool GDNativeClass_getunboundmethod_pybind(int argc, py_Ref argv) {
 
 bool GDNativeClass_getunboundmethod(py_Ref self, py_Name name) {
 	py_OutRef out = py_retval();
-	py_newnativefunc(out, GDNativeClass_getunboundmethod_pybind);
-	char* p_sn = out->_chars + sizeof(py_CFunction);
-	memcpy(p_sn, &name, sizeof(py_Name));
+	new_nativefunc_with_name(out, GDNativeClass_getunboundmethod_pybind, name);
 	return true;
 }
 
