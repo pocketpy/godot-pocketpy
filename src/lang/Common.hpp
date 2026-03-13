@@ -110,7 +110,7 @@ struct PythonContext {
 	// internals
 	py_Type tp_DefineStatement;
 	std::thread::id main_thread_id;
-	std::atomic_flag lock;
+	// std::atomic_flag lock;
 	PythonScriptReloadingContext reloading_context;
 	HashMap<String, Variant> class_constants;
 	struct {
@@ -118,6 +118,7 @@ struct PythonContext {
 		py_Name __name__;
 		py_Name __call__;
 		py_Name script;
+		py_Name owner;
 	} names;
 };
 
@@ -171,17 +172,17 @@ struct SignalStatement : DefineStatement {
 
 PythonContext *pyctx();
 
-struct PythonContextLock {
-	PythonContextLock() {
-		while (pyctx()->lock.test_and_set()) {
-			std::this_thread::yield();
-		}
-	}
+// struct PythonContextLock {
+// 	PythonContextLock() {
+// 		while (pyctx()->lock.test_and_set()) {
+// 			std::this_thread::yield();
+// 		}
+// 	}
 
-	~PythonContextLock() {
-		pyctx()->lock.clear();
-	}
-};
+// 	~PythonContextLock() {
+// 		pyctx()->lock.clear();
+// 	}
+// };
 
 inline py_Name godot_name_to_python(StringName name) {
 	const py_Name &retval = (const py_Name &)name;

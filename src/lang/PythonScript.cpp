@@ -72,7 +72,7 @@ void *PythonScript::_instance_create(Object *for_object) const {
 	py_assign(&ud->py, py_retval());
 	// assign owner
 	Variant owner = for_object;
-	py_newvariant(py_emplacedict(&ud->py, py_name("owner")), &owner);
+	py_newvariant(py_emplacedict(&ud->py, pyctx()->names.owner), &owner);
 	// assign default values
 	for (const auto &it : meta.default_values) {
 		py_Name name = godot_name_to_python(it.key);
@@ -99,11 +99,11 @@ void *PythonScript::_instance_create(Object *for_object) const {
 			return NULL;
 		}
 	}
-	return godot::internal::gdextension_interface_script_instance_create3(PythonScriptInstance::get_script_instance_info(), ud);
+	return internal::gdextension_interface_script_instance_create3(PythonScriptInstance::get_script_instance_info(), ud);
 }
 
 void *PythonScript::_placeholder_instance_create(Object *for_object) const {
-	void *placeholder = godot::internal::gdextension_interface_placeholder_script_instance_create(PythonScriptLanguage::get_singleton()->_owner, this->_owner, for_object->_owner);
+	void *placeholder = internal::gdextension_interface_placeholder_script_instance_create(PythonScriptLanguage::get_singleton()->_owner, this->_owner, for_object->_owner);
 	placeholders.get(this).insert(placeholder);
 	_update_placeholder_exports(placeholder);
 	return placeholder;
@@ -137,12 +137,12 @@ Error PythonScript::_reload(bool keep_state) {
 			(long long)std::hash<std::thread::id>()(tid));
 
 	if (tid != pyctx()->main_thread_id) {
-		WARN_PRINT("PythonScript.reload() must be called from the main thread!");
-		py_switchvm(0);
-		// return ERR_UNAVAILABLE;
+		ERR_PRINT("PythonScript.reload() must be called from the main thread!");
+		// py_switchvm(0);
+		return ERR_UNAVAILABLE;
 	}
 
-	PythonContextLock lock;
+	// PythonContextLock lock;
 
 	placeholder_fallback_enabled = true;
 	meta.is_valid = false;
@@ -438,7 +438,7 @@ void PythonScript::_update_placeholder_exports(void *placeholder) const {
 
 	// String repr = Variant(default_values).stringify();
 	// WARN_PRINT("Updating placeholder exports: " + repr);
-	godot::internal::gdextension_interface_placeholder_script_instance_update(placeholder, properties._native_ptr(), default_values._native_ptr());
+	internal::gdextension_interface_placeholder_script_instance_update(placeholder, properties._native_ptr(), default_values._native_ptr());
 }
 
 HashMap<const PythonScript *, HashSet<void *>> PythonScript::placeholders;

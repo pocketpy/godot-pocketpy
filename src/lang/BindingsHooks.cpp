@@ -205,7 +205,7 @@ static bool GDNativeClass_getunboundmethod_pybind(int argc, py_Ref argv) {
 			for (int i = 1; i < argc; i++) {
 				args.set(i - 1, py_tovariant(&argv[i]));
 			}
-			godot::internal::gdextension_interface_variant_call_static(
+			internal::gdextension_interface_variant_call_static(
 					(GDExtensionVariantType)p_gdn->type, &method, args.ptr(), args.size(), &r_ret, &r_error);
 		}
 		if (!handle_gde_call_error(r_error)) {

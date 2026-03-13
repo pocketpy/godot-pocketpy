@@ -188,11 +188,12 @@ static void setup_exports() {
 
 void setup_python_bindings() {
 	pyctx()->main_thread_id = std::this_thread::get_id();
-	pyctx()->lock.clear();
+	// pyctx()->lock.clear();
 	pyctx()->names.__init__ = py_name("__init__");
 	pyctx()->names.__name__ = py_name("__name__");
 	pyctx()->names.__call__ = py_name("__call__");
 	pyctx()->names.script = py_name("script");
+	pyctx()->names.owner = py_name("owner");
 
 	py_callbacks()->gc_mark = PythonScriptInstance::gc_mark_instances;
 	py_callbacks()->print = [](const char *msg) {
