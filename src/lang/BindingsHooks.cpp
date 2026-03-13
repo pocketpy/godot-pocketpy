@@ -60,7 +60,7 @@ static bool Variant_getunboundmethod_pybind(int argc, py_Ref argv) {
 	bool r_valid;
 	Variant named_variant = v.get_named(name_sn, r_valid);
 
-	if (r_valid) {
+	if (r_valid && named_variant.get_type() == Variant::CALLABLE) {
 		Callable callable = named_variant;
 		Variant res;
 		Variant stack_args[4];
@@ -100,6 +100,7 @@ static bool Variant_getunboundmethod_pybind(int argc, py_Ref argv) {
 				break;
 			}
 		}
+		py_newvariant(py_retval(), &res);
 		return true;
 	} else {
 		return AttributeError(&argv[0], name);

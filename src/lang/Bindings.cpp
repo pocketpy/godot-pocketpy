@@ -29,12 +29,12 @@ static bool call_next_for_coroutine(Object* owner, IdGenerator::T id) {
 
 	PythonScriptInstance *instance = PythonScriptInstance::attached_to_object(owner);
 	if(instance == NULL) {
-		py_newnone(py_retval());
+		py_newint(py_retval(), id);
 		return true;
 	}
 	py_ItemRef gen = instance->coroutines.getptr(id);
 	if(gen == NULL) {
-		py_newnone(py_retval());
+		py_newint(py_retval(), id);
 		return true;
 	}
 
@@ -51,7 +51,7 @@ static bool call_next_for_coroutine(Object* owner, IdGenerator::T id) {
 		Signal signal = v;
 		Callable callable = callable_mp_static(call_next_for_coroutine_no_error);
 		signal.connect(callable.bind(id), Object::CONNECT_ONE_SHOT | Object::CONNECT_DEFERRED);
-		py_newnone(py_retval());
+		py_newint(py_retval(), id);
 		return true;
 	} else if (res == -1) {
 		instance->coroutines.erase(id);
@@ -59,7 +59,7 @@ static bool call_next_for_coroutine(Object* owner, IdGenerator::T id) {
 	} else {
 		// generator finished
 		instance->coroutines.erase(id);
-		py_newnone(py_retval());
+		py_newint(py_retval(), id);
 		return true;
 	}
 }
