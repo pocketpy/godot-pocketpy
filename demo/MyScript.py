@@ -29,7 +29,7 @@ class MyScript(Extends(Node)):
 		print('==> vector2:', Vector2(1.5, 2.5).angle())
 
 		self.health_changed.emit(100, 200)
-		start_coroutine(self.coro(3))
+		self.start_coroutine(self.coro(3))
 
 	def coro_one_sec(self, i: int):
 		print(f'  coro_one_sec({i}) start')
