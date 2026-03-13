@@ -34,7 +34,7 @@ class MyScript(Extends(Node)):
 	def coro_one_sec(self, i: int):
 		print(f'  coro_one_sec({i}) start')
 		yield self.owner.get_tree().create_timer(1).timeout
-		yield 3
+		#yield 3
 		print(f'  coro_one_sec({i}) end')
 
 	def coro(self, secs: int):

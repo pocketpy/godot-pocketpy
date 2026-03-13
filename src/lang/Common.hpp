@@ -66,6 +66,7 @@ struct InternalArguments {
 				dyn._pointers.write[i] = &dyn._args[i];
 			}
 		} else {
+			std::memset(stc._args, 0, sizeof(Variant) * 4);
 			for (int i = 0; i < length; i++) {
 				stc._pointers[i] = &stc._args[i];
 			}
