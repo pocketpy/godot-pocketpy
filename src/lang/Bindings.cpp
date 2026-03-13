@@ -50,7 +50,7 @@ static bool call_next_for_coroutine(Object* owner, IdGenerator::T id) {
 		}
 		Signal signal = v;
 		Callable callable = callable_mp_static(call_next_for_coroutine_no_error);
-		signal.connect(callable.bind(id), Object::CONNECT_ONE_SHOT | Object::CONNECT_DEFERRED);
+		signal.connect(callable.bind(owner, id), Object::CONNECT_ONE_SHOT | Object::CONNECT_DEFERRED);
 		py_newint(py_retval(), id);
 		return true;
 	} else if (res == -1) {
