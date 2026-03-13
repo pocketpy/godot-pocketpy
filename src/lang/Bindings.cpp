@@ -1,6 +1,5 @@
 #include "Bindings.hpp"
 #include "PythonScriptInstance.hpp"
-#include "pocketpy.h"
 
 #include <godot_cpp/classes/engine.hpp>
 #include <godot_cpp/classes/file_access.hpp>

@@ -16,32 +16,30 @@ using namespace godot;
 
 namespace pkpy {
 
-inline py_Name godot_name_to_python(StringName name) {
-	const py_Name &retval = (const py_Name &)name;
-	return retval;
-}
-
-inline StringName python_name_to_godot(py_Name name) {
-	const StringName &sn = (const StringName &)name;
-	return sn;
-}
+struct IdGenerator {
+	using T = py_i64;
+	T _counter;
+	IdGenerator() : _counter(1) {}
+	T next() { return _counter++; }
+	void reset() { _counter = 1; }
+};
 
 struct PythonScriptReloadingContext {
 	StringName class_name;
 	StringName extends;
-	int counter;
+	IdGenerator id_gen;
 
 	PythonScriptReloadingContext() :
-			class_name(), extends(), counter(0) {}
+			class_name(), extends(), id_gen() {}
 
 	inline void reset() {
 		class_name = StringName();
 		extends = StringName();
-		counter = 0;
+		id_gen.reset();
 	}
 
-	inline int next_index() {
-		return counter++;
+	inline IdGenerator::T next_index() {
+		return id_gen.next();
 	}
 };
 
@@ -132,15 +130,11 @@ struct GDNativeClass {
 			type(type), name(clazz) {}
 };
 
-struct PythonThreadContext {
-	HashMap<void*, py_TValue> pending_coroutines;
-};
-
 struct DefineStatement {
-	int index;
+	IdGenerator::T index;
 	String name;
 
-	DefineStatement(int index) :
+	DefineStatement(IdGenerator::T index) :
 			index(index), name() {}
 
 	bool operator<(const DefineStatement &other) const {
@@ -172,16 +166,9 @@ struct SignalStatement : DefineStatement {
 	}
 };
 
+///////////////////
+
 PythonContext *pyctx();
-
-void log_python_error_and_clearexc(py_StackRef p0);
-
-void py_newvariant(py_OutRef out, const Variant *val);
-void py_newstring(py_OutRef out, String val);
-
-Variant py_tovariant(py_Ref val);
-Variant to_variant_exact(py_Ref val);
-void dispose_contexts();
 
 struct PythonContextLock {
 	PythonContextLock() {
@@ -195,11 +182,23 @@ struct PythonContextLock {
 	}
 };
 
-struct IdGenerator {
-	using T = py_i64;
-	T _counter;
-	IdGenerator() : _counter(1) {}
-	T next() { return _counter++; }
-};
+inline py_Name godot_name_to_python(StringName name) {
+	const py_Name &retval = (const py_Name &)name;
+	return retval;
+}
+
+inline StringName python_name_to_godot(py_Name name) {
+	const StringName &sn = (const StringName &)name;
+	return sn;
+}
+
+void log_python_error_and_clearexc(py_StackRef p0);
+
+void py_newvariant(py_OutRef out, const Variant *val);
+void py_newstring(py_OutRef out, String val);
+
+Variant py_tovariant(py_Ref val);
+Variant to_variant_exact(py_Ref val);
+void dispose_contexts();
 
 } // namespace pkpy

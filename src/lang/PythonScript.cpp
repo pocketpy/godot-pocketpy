@@ -1,6 +1,5 @@
 #include "PythonScript.hpp"
 
-#include "Common.hpp"
 #include "PythonScriptInstance.hpp"
 #include "PythonScriptLanguage.hpp"
 
