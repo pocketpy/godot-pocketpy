@@ -254,6 +254,7 @@ Error PythonScript::_reload(bool keep_state) {
 	known_classes[ctx->class_name] = get_path();
 	if(!Engine::get_singleton()->is_editor_hint()){
 		py_setdict(pyctx()->godot_scripts, class_name, exposed_class);
+		runtime_type_to_script[exposed_type] = this;
 	}
 	return OK;
 }
@@ -443,6 +444,7 @@ void PythonScript::_update_placeholder_exports(void *placeholder) const {
 HashMap<const PythonScript *, HashSet<void *>> PythonScript::placeholders;
 
 HashMap<StringName, String> PythonScript::known_classes;
+HashMap<py_Type, PythonScript *> PythonScript::runtime_type_to_script;
 
 void PythonScript::rebuild_index_file() {
 	if(!Engine::get_singleton()->is_editor_hint()){

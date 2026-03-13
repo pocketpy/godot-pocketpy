@@ -65,6 +65,27 @@ static bool call_next_for_coroutine(Object* owner, IdGenerator::T id) {
 }
 
 static void setup_awaitables() {
+	py_bindmethod(pyctx()->tp_Script, "__new__", [](int argc, py_Ref argv) -> bool {
+		PY_CHECK_ARGC(1);
+		py_Type cls = py_totype(&argv[0]);
+		PythonScript *script = PythonScript::runtime_type_to_script.get(cls);
+		StringName node_cls = script->meta.extends;
+		if(!ClassDB::can_instantiate(node_cls)) {
+			py_Name node_cls_py = godot_name_to_python(node_cls);
+			return TypeError("cannot instantiate script that extends '%n'", node_cls_py);
+		}
+		Variant v = ClassDB::instantiate(node_cls);
+		Node* node = Object::cast_to<Node>(v);
+		if(node == NULL) {
+			return RuntimeError("Object::cast_to<Node> failed");
+		}
+
+		Ref<Script> arg(script);
+		node->set_script(arg);
+		py_newvariant(py_retval(), &v);
+		return true;
+	});
+	
 	py_bindmethod(pyctx()->tp_Script, "start_coroutine", [](int argc, py_Ref argv) -> bool {
 		PY_CHECK_ARGC(2);
 		PY_CHECK_ARG_TYPE(1, tp_generator);

@@ -547,6 +547,8 @@ from . import classes
 class PythonScriptInstance[T: classes.Object]:
     owner: T
 
+    def __new__(cls) -> T: ...
+
     def start_coroutine(self, gen) -> int:
         """Start a coroutine. The argument should be a `generator` object.
 

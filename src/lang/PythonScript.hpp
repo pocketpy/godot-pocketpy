@@ -83,9 +83,13 @@ public:
 	Variant _new(const Variant **args, GDExtensionInt arg_count, GDExtensionCallError &error);
 
 	PythonScriptMeta meta;
+
 	static void rebuild_index_file();
+	static HashMap<py_Type, PythonScript *> runtime_type_to_script;
+
 	static void dispose() {
 		known_classes.clear();
+		runtime_type_to_script.clear();
 	}
 
 protected:
@@ -103,6 +107,7 @@ protected:
 
 private:
 	static HashMap<StringName, String> known_classes;
+	
 };
 
 } //namespace pkpy
