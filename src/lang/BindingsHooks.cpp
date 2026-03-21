@@ -245,7 +245,7 @@ bool handle_gde_call_error(GDExtensionCallError error) {
 	}
 }
 
-static bool godot_isinstance_one(py_Ref obj, py_Ref type_obj) {
+bool godot_isinstance_one(py_Ref obj, py_Ref type_obj) {
 	if (py_istype(type_obj, tp_type)) {
 		return py_isinstance(obj, py_totype(type_obj));
 	}

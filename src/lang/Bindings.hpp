@@ -20,6 +20,7 @@ bool GDNativeClass_getunboundmethod(py_Ref self, py_Name name);
 
 bool handle_gde_call_error(GDExtensionCallError error);
 bool godot_isinstance(int argc, py_Ref argv);
+bool godot_isinstance_one(py_Ref obj, py_Ref type_obj);
 
 inline StringName to_GDNativeClass(py_Ref self) {
 	GDNativeClass *p = (GDNativeClass *)py_totrivial(self);

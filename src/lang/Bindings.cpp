@@ -248,6 +248,16 @@ void setup_python_bindings() {
 		return true;
 	});
 
+	// cast()
+	py_bindfunc(godot, "cast", [](int argc, py_Ref argv) -> bool {
+		PY_CHECK_ARGC(2);
+		if(!godot_isinstance_one(py_arg(0), py_arg(1))) {
+			return TypeError("cast(): !godot_isinstance_one");
+		}
+		py_assign(py_retval(), py_arg(0));
+		return true;
+	});
+
 	// Script
 	pyctx()->tp_Script = py_newtype("PythonScriptInstance", tp_object, godot, [](void *ud) {
 		auto *self = (PythonScriptInstance *)ud;
