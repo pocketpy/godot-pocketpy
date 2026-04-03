@@ -24,3 +24,28 @@ export_writer(map_result.c_writer, 'src/lang/BindingsGenerated.cpp')
 
 for path, writer in map_result.pyi_writers.items():
     export_writer(writer, f'{GODOT_TYPINGS_PATH}/{path}')
+
+# create leveldb
+with open(f'{GODOT_TYPINGS_PATH}/leveldb.pyi', 'w') as f:
+    f.write('''
+from typing import Iterator
+
+class DB:
+    def __new__(
+            cls,
+            path: str,
+            create_if_missing=False,
+            error_if_exists=False,
+            paranoid_checks=False,
+            bloom_filter_policy_bits=0,
+        ): ...
+    def get(self, key: str, verify_checksums=False) -> bytes | None: ...
+    def put(self, key: str, value: bytes, sync=False) -> None: ...
+    def delete(self, key: str, sync=False) -> None: ...
+    def close(self) -> None: ...
+
+    def write(self, *ops: tuple[str, bytes | None], sync=False) -> None: ...
+
+    def iter(self, start: str | None = None, end: str | None = None, verify_checksums=False) -> Iterator[tuple[str, bytes]]: ...
+
+''')

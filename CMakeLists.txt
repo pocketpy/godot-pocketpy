@@ -75,8 +75,14 @@ if(DOC_XML)
     endif()
 endif()
 
+option(LEVELDB_BUILD_TESTS "Build LevelDB's unit tests" OFF)
+option(LEVELDB_BUILD_BENCHMARKS "Build LevelDB's benchmarks" OFF)
+option(LEVELDB_INSTALL "Install LevelDB's header and library" OFF)
+add_subdirectory(leveldb)
+
 target_link_libraries(${LIBNAME} PRIVATE godot-cpp)
 target_link_libraries(${LIBNAME} PRIVATE pocketpy)
+target_link_libraries(${LIBNAME} PRIVATE leveldb)
 
 set(GODOT_PROJECT_BINARY_DIR "${PROJECT_SOURCE_DIR}/${GODOT_PROJECT_DIR}/addons/godot-pocketpy/bin/${GODOTCPP_PLATFORM}")
 
