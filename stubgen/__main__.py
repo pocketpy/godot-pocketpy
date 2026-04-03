@@ -26,7 +26,7 @@ for path, writer in map_result.pyi_writers.items():
     export_writer(writer, f'{GODOT_TYPINGS_PATH}/{path}')
 
 # create leveldb
-with open(f'{GODOT_TYPINGS_PATH}/leveldb.pyi', 'w') as f:
+with open(f'{TYPINGS_PATH}/leveldb.pyi', 'w') as f:
     f.write('''
 from typing import Iterator
 
