@@ -1,5 +1,6 @@
 #include "Bindings.hpp"
 #include "PythonScriptInstance.hpp"
+#include "LevelDB.hpp"
 
 #include <godot_cpp/classes/engine.hpp>
 #include <godot_cpp/classes/file_access.hpp>
@@ -418,6 +419,8 @@ void setup_python_bindings() {
 	setup_bindings_generated();
 
 	setup_awaitables();
+
+	setup_leveldb_module();
 
 	printf("==> setup_python_bindings() done!\n");
 }
