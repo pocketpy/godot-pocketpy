@@ -139,10 +139,10 @@ void setup_leveldb_module() {
         return true;
     });
 
-    py_bind(py_tpobject(tp_DB), "write(self, *ops: tuple[str, bytes | None], sync=False)", [](int argc, py_Ref argv) -> bool {
+    py_bind(py_tpobject(tp_DB), "write(self, ops: dict[str, bytes | None], sync=False)", [](int argc, py_Ref argv) -> bool {
         LevelDB* self = (LevelDB*)py_touserdata(py_arg(0));
         if(self->db == NULL) return RuntimeError("LevelDB is closed");
-        PY_CHECK_ARG_TYPE(1, tp_tuple);
+        PY_CHECK_ARG_TYPE(1, tp_dict);
         PY_CHECK_ARG_TYPE(2, tp_bool);
 
         py_StackRef ops = py_arg(1);
@@ -151,24 +151,22 @@ void setup_leveldb_module() {
         leveldb::WriteOptions options;
         options.sync = py_tobool(py_arg(2));
 
-        for(int i=0; i<py_tuple_len(ops); i++) {
-            py_Ref kv = py_tuple_getitem(ops, i);
-            if(!py_checktype(kv, tp_tuple)) return false;
-            if(py_tuple_len(kv) != 2) return TypeError("LevelDB each op must be a tuple of (key, value)");
-            py_Ref keyi = py_tuple_getitem(kv, 0);
-            py_Ref valuei = py_tuple_getitem(kv, 1);
-            if(!py_checktype(keyi, tp_str)) return false;
-            const char* key = py_tostr(keyi);
-            if(py_isnone(valuei)) {
-                batch.Delete(key);
+        py_dict_apply(ops, [](py_Ref key, py_Ref value, void* arg) {
+            leveldb::WriteBatch* batch = (leveldb::WriteBatch*)arg;
+            if(!py_checktype(key, tp_str)) return false;
+            const char* key_str = py_tostr(key);
+            if(py_isnone(value)) {
+                batch->Delete(key_str);
             } else {
-                if(!py_checktype(valuei, tp_bytes)) return false;
+                if(!py_checktype(value, tp_bytes)) return false;
                 int value_size;
-                unsigned char* value = py_tobytes(valuei, &value_size);
-                leveldb::Slice value_slice((const char*)value, value_size);
-                batch.Put(key, value_slice);
+                unsigned char* value_bytes = py_tobytes(value, &value_size);
+                leveldb::Slice value_slice((const char*)value_bytes, value_size);
+                batch->Put(key_str, value_slice);
             }
-        }
+            return true;
+        }, &batch);
+
         leveldb::Status status = self->db->Write(options, &batch);
         if (!status.ok()) {
             return RuntimeError("LevelDB failed to write batch: %s", status.ToString().c_str());
