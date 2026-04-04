@@ -2,6 +2,7 @@
 #include "leveldb/filter_policy.h"
 #include "leveldb/write_batch.h"
 #include "LevelDB.hpp"
+#include <godot_cpp/classes/project_settings.hpp>
 #include "pocketpy.h"
 
 namespace pkpy {
@@ -61,7 +62,11 @@ void setup_leveldb_module() {
         } else {
             options.filter_policy = NULL;
         }
-        leveldb::Status status = leveldb::DB::Open(options, path, &db);
+
+        godot::String global_path = godot::ProjectSettings::get_singleton()->globalize_path(path);
+        godot::print_line("LevelDB opening path: " + global_path);
+
+        leveldb::Status status = leveldb::DB::Open(options, global_path.utf8().get_data(), &db);
         if (!status.ok()) {
             delete options.filter_policy;
             return RuntimeError("LevelDB failed to open: %s", status.ToString().c_str());
