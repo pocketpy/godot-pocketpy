@@ -1,0 +1,11 @@
+[gd_scene format=3 uid="uid://b0qvljomg6v7b"]
+
+[ext_resource type="Script" uid="uid://maq3kqjlfu3c" path="res://addons/immediate_gizmos/examples/3D/gizmos.gd" id="1_qa6j8"]
+
+[node name="ImmediateGizmos3DExample" type="Node3D" unique_id=1594718266]
+
+[node name="Gizmos" type="Node3D" parent="." unique_id=885049763]
+script = ExtResource("1_qa6j8")
+
+[node name="Camera3D" type="Camera3D" parent="." unique_id=1086727729]
+transform = Transform3D(1, 0, 0, 0, 0.915992, 0.40119657, 0, -0.40119657, 0.915992, 4, 9.210738, 7.384383)

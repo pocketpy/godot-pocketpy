@@ -1,0 +1,7 @@
+[gd_resource type="ShaderMaterial" format=3 uid="uid://b035ot2gsty4q"]
+
+[ext_resource type="Shader" uid="uid://cetsfce0nr3se" path="res://addons/immediate_gizmos/materials/immediate_gizmos_text_3d.gdshader" id="1_85k35"]
+
+[resource]
+render_priority = 0
+shader = ExtResource("1_85k35")

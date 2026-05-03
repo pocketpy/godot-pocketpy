@@ -1,0 +1,6 @@
+[gd_resource type="ShaderMaterial" format=3 uid="uid://b2flvl8n7su3r"]
+
+[ext_resource type="Shader" uid="uid://c7a5b6jhygm72" path="res://addons/immediate_gizmos/materials/immediate_gizmos_text_2d.gdshader" id="1_icwsh"]
+
+[resource]
+shader = ExtResource("1_icwsh")

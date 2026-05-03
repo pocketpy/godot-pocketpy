@@ -1,0 +1,31 @@
+[gd_scene format=3 uid="uid://hhb2ntl7222a"]
+
+[ext_resource type="Script" uid="uid://b7blmo0lje63g" path="res://CubePhysicsBodyDebug.gd" id="1_upmpt"]
+
+[sub_resource type="BoxMesh" id="BoxMesh_upmpt"]
+
+[node name="CubePhyscis" type="Node3D" unique_id=272191968]
+
+[node name="CubePhysicsSpace" type="CubePhysicsSpace" parent="." unique_id=1961122903]
+
+[node name="a" type="CubePhysicsBody" parent="CubePhysicsSpace" unique_id=1155890929]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -3.3556924, -1, -1)
+script = ExtResource("1_upmpt")
+init_vel = Vector3(1, 0, 0)
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="CubePhysicsSpace/a" unique_id=1187451782]
+transform = Transform3D(1.8, 0, 0, 0, 1.8, 0, 0, 0, 1.8, 0, 0, 0)
+mesh = SubResource("BoxMesh_upmpt")
+
+[node name="b" type="CubePhysicsBody" parent="CubePhysicsSpace" unique_id=138621795]
+is_static = true
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.6956232, -1, -1)
+script = ExtResource("1_upmpt")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="CubePhysicsSpace/b" unique_id=723641182]
+transform = Transform3D(1.8, 0, 0, 0, 1.8, 0, 0, 0, 1.8, 0, 0, 0)
+mesh = SubResource("BoxMesh_upmpt")
+
+[node name="Camera3D" type="Camera3D" parent="." unique_id=343441278]
+transform = Transform3D(1, 0, 0, 0, 0.8660254, 0.5, 0, -0.5, 0.8660254, -0.043, 3.348, 6.285)
+current = true

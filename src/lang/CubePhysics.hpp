@@ -1,6 +1,7 @@
+#include "godot_cpp/classes/node3d.hpp"
 #include "godot_cpp/templates/hash_map.hpp"
 #include "godot_cpp/templates/hash_set.hpp"
-#include "godot_cpp/templates/vector.hpp"
+#include <cassert>
 
 namespace cube_physics {
 
@@ -8,7 +9,151 @@ using namespace godot;
 
 struct Space;
 
-const float MIN_PENETRATION_DEPTH = 0.001f;
+const float FLOAT_MAX = 1e9f;
+const float PENETRATION_CORRECTION_PERCENTAGE = 0.2f;
+const Vector2i INVALID_CHUNK_POS = Vector2i(INT_MAX, INT_MAX);
+
+struct Line {
+	Vector3 p1;
+	Vector3 p2;
+};
+
+struct UnitVector3 {
+	int axis;
+	int sign;
+
+	UnitVector3 flip() const {
+		return UnitVector3{ axis, -sign };
+	}
+
+	Vector3 to_vec3() const {
+		Vector3 v(0, 0, 0);
+		v[axis] = (float)sign;
+		return v;
+	}
+};
+
+inline bool aabb_intersects(Vector3 vmin, Vector3 vmax, Vector3 other_vmin, Vector3 other_vmax) {
+	float sep_x1 = other_vmin.x - vmax.x;
+	float sep_x2 = vmin.x - other_vmax.x;
+	float sep_y1 = other_vmin.y - vmax.y;
+	float sep_y2 = vmin.y - other_vmax.y;
+	float sep_z1 = other_vmin.z - vmax.z;
+	float sep_z2 = vmin.z - other_vmax.z;
+
+	return sep_x1 < 0 && sep_x2 < 0 && sep_y1 < 0 && sep_y2 < 0 && sep_z1 < 0 && sep_z2 < 0;
+}
+
+inline Vector3 cross_axis(Vector3 v, int axis) {
+	// Vector3 p_with(0, 0, 0);
+	// p_with[axis] = 1;
+	// Vector3 ret(
+	// 		(v.y * p_with.z) - (v.z * p_with.y),
+	// 		(v.z * p_with.x) - (v.x * p_with.z),
+	// 		(v.x * p_with.y) - (v.y * p_with.x));
+	// return ret;
+	if (axis == 0) {
+		return Vector3(0, v.z, -v.y);
+	} else if (axis == 1) {
+		return Vector3(-v.z, 0, v.x);
+	} else {
+		return Vector3(v.y, -v.x, 0);
+	}
+}
+
+struct AAFace {
+	UnitVector3 normal;
+	Vector3 vmin;
+	Vector3 vmax;
+
+	void get_ccw_points(Vector3 p_points[4]) const {
+		static const int LUT[6][4] = {
+			{ 0b000, 0b100, 0b110, 0b010 }, /* axis=0 sign=-1  (-X) */
+			{ 0b001, 0b011, 0b111, 0b101 }, /* axis=0 sign=+1  (+X) */
+			{ 0b000, 0b001, 0b101, 0b100 }, /* axis=1 sign=-1  (-Y) */
+			{ 0b010, 0b110, 0b111, 0b011 }, /* axis=1 sign=+1  (+Y) */
+			{ 0b000, 0b010, 0b011, 0b001 }, /* axis=2 sign=-1  (-Z) */
+			{ 0b100, 0b101, 0b111, 0b110 }, /* axis=2 sign=+1  (+Z) */
+		};
+		int row = normal.axis * 2 + (normal.sign > 0 ? 1 : 0);
+		for (int i = 0; i < 4; i++) {
+			int mask = LUT[row][i];
+			p_points[i] = Vector3(
+					((mask >> 0) & 1) ? vmax.x : vmin.x,
+					((mask >> 1) & 1) ? vmax.y : vmin.y,
+					((mask >> 2) & 1) ? vmax.z : vmin.z);
+		}
+	}
+
+	void get_parallel_edges(int axis, Line *p_edges) const {
+		assert(axis != normal.axis);
+		p_edges[0].p1 = vmin;
+		p_edges[0].p2 = vmax;
+		p_edges[1].p1 = vmin;
+		p_edges[1].p2 = vmax;
+		p_edges[0].p1[axis] = vmin[axis];
+		p_edges[0].p2[axis] = vmin[axis];
+		p_edges[1].p1[axis] = vmax[axis];
+		p_edges[1].p2[axis] = vmax[axis];
+	}
+
+	Vector3 find_closest_distance(const AAFace &other) const {
+		float global_min_dist_squared = FLOAT_MAX;
+		Vector3 global_min_dir;
+
+		for (int axis = 0; axis < 3; axis++) {
+			if (axis == normal.axis)
+				continue;
+
+			Line edges_a[2], edges_b[2];
+			get_parallel_edges(axis, edges_a);
+			other.get_parallel_edges(axis, edges_b);
+
+			// find the closest edge pair
+			float min_dist_squared = FLOAT_MAX;
+			int min_edge_a = -1;
+			int min_edge_b = -1;
+			Vector3 min_dir;
+			for (int i = 0; i < 2; i++) {
+				for (int j = 0; j < 2; j++) {
+					Vector3 dir = cross_axis(edges_b[j].p1 - edges_a[i].p1, axis);
+					if (dir.length_squared() < min_dist_squared) {
+						min_dist_squared = dir.length_squared();
+						min_edge_a = i;
+						min_edge_b = j;
+						min_dir = dir;
+					}
+				}
+			}
+			assert(min_edge_a != -1 && min_edge_b != -1);
+
+			// check overlap at this axis
+			float overlap_min = MAX(vmin[axis], other.vmin[axis]);
+			float overlap_max = MIN(vmax[axis], other.vmax[axis]);
+			float overlap = overlap_max - overlap_min;
+			if (overlap <= 0) {
+				// no overlap, use the closest vertices
+				min_dist_squared = FLOAT_MAX;
+				min_dir.zero();
+				for (int i = 0; i < 2; i++) {
+					for (int j = 0; j < 2; j++) {
+						Vector3 dir = edges_b[j].p1 - edges_a[i].p1;
+						if (dir.length_squared() < min_dist_squared) {
+							min_dist_squared = dir.length_squared();
+							min_dir = dir;
+						}
+					}
+				}
+			}
+
+			if (min_dist_squared < global_min_dist_squared) {
+				global_min_dist_squared = min_dist_squared;
+				global_min_dir = min_dir;
+			}
+		}
+		return global_min_dir;
+	}
+};
 
 struct AABB {
 	Vector3 vmin;
@@ -22,41 +167,78 @@ struct AABB {
 	Vector3 position() const { return vmin; }
 	Vector3 size() const { return vmax - vmin; }
 
-	void move(Vector3 delta) {
-		vmin += delta;
-		vmax += delta;
+	bool intersects(const AABB &other) const {
+		return aabb_intersects(vmin, vmax, other.vmin, other.vmax);
 	}
 
-	bool intersects(const AABB &other, AABB *p_overlap) const {
-		AABB overlap(
-				Vector3(std::max(vmin.x, other.vmin.x), std::max(vmin.y, other.vmin.y), std::max(vmin.z, other.vmin.z)),
-				Vector3(std::min(vmax.x, other.vmax.x), std::min(vmax.y, other.vmax.y), std::min(vmax.z, other.vmax.z)));
-
-		Vector3 overlap_size = overlap.size();
-		if (overlap_size.x <= MIN_PENETRATION_DEPTH)
-			return false;
-		if (overlap_size.y <= MIN_PENETRATION_DEPTH)
-			return false;
-		if (overlap_size.z <= MIN_PENETRATION_DEPTH)
-			return false;
-
-		if (p_overlap)
-			*p_overlap = overlap;
-		return true;
-	}
-
-	Vector3 find_min_size_axis(float *p_min_size) const {
-		Vector3 overlap_size = size();
-		if (overlap_size.x < overlap_size.y && overlap_size.x < overlap_size.z) {
-			*p_min_size = overlap_size.x;
-			return Vector3(1, 0, 0);
-		} else if (overlap_size.y < overlap_size.z) {
-			*p_min_size = overlap_size.y;
-			return Vector3(0, 1, 0);
+	AAFace get_face(UnitVector3 normal) const {
+		AAFace face;
+		face.normal = normal;
+		face.vmin = vmin;
+		face.vmax = vmax;
+		int axis = normal.axis;
+		if (normal.sign > 0) {
+			face.vmin[axis] = vmax[axis];
 		} else {
-			*p_min_size = overlap_size.z;
-			return Vector3(0, 0, 1);
+			face.vmax[axis] = vmin[axis];
 		}
+		return face;
+	}
+
+	float find_max_separation(const AABB &other, UnitVector3 *p_reference_normal) const {
+		float sep_x1 = other.vmin.x - vmax.x;
+		float sep_x2 = vmin.x - other.vmax.x;
+		float sep_y1 = other.vmin.y - vmax.y;
+		float sep_y2 = vmin.y - other.vmax.y;
+		float sep_z1 = other.vmin.z - vmax.z;
+		float sep_z2 = vmin.z - other.vmax.z;
+
+		float max_sep = sep_x1;
+		*p_reference_normal = UnitVector3{ 0, 1 };
+		if (sep_x2 > max_sep) {
+			max_sep = sep_x2;
+			*p_reference_normal = UnitVector3{ 0, -1 };
+		}
+		if (sep_y1 > max_sep) {
+			max_sep = sep_y1;
+			*p_reference_normal = UnitVector3{ 1, -1 };
+		}
+		if (sep_y2 > max_sep) {
+			max_sep = sep_y2;
+			*p_reference_normal = UnitVector3{ 1, 1 };
+		}
+		if (sep_z1 > max_sep) {
+			max_sep = sep_z1;
+			*p_reference_normal = UnitVector3{ 2, -1 };
+		}
+		if (sep_z2 > max_sep) {
+			max_sep = sep_z2;
+			*p_reference_normal = UnitVector3{ 2, 1 };
+		}
+		return max_sep;
+	}
+};
+
+struct Cube {
+	AABB core;
+	float radius;
+
+	AABB aabb() const {
+		if (radius == 0)
+			return core;
+		return AABB(core.vmin - Vector3(radius, radius, radius), core.vmax + Vector3(radius, radius, radius));
+	}
+
+	void move(Vector3 delta) {
+		core.vmin += delta;
+		core.vmax += delta;
+	}
+
+	void apply(Vector3 position, Vector3 extent, float radius01) {
+		this->radius = radius01 * extent[extent.min_axis_index()];
+		Vector3 offset = (extent - Vector3(1, 1, 1) * radius);
+		this->core.vmin = position - offset;
+		this->core.vmax = position + offset;
 	}
 };
 
@@ -65,30 +247,67 @@ struct Body {
 	Body *next;
 	void *ctx;
 
-	AABB aabb;
+	Cube cube;
 	Vector3 velocity;
 	Vector3 instant_velocity;
+	Vector2i chunk_pos;
 
 	uint32_t layer;
-
 	bool is_static;
 	bool is_trigger;
-
 	float mass;
 
-	float inv_mass() const {
-		return is_static ? 0 : 1 / mass;
+	Body(void *ctx, uint32_t layer, bool is_static, bool is_trigger, float mass) :
+			prev(nullptr), next(nullptr), ctx(ctx), layer(layer), is_static(is_static), is_trigger(is_trigger), mass(mass) {
+		std::memset(&cube, 0, sizeof(Cube));
+		velocity.zero();
+		instant_velocity.zero();
+		chunk_pos = INVALID_CHUNK_POS;
 	}
 
-	Vector3 position() const { return aabb.position(); }
+	Vector3 position() const { return cube.core.position(); }
 
 	void zero_velocity() {
 		velocity = Vector3(0, 0, 0);
+		instant_velocity = Vector3(0, 0, 0);
 	}
 
 	bool is_moving() const {
-		return velocity != Vector3(0, 0, 0);
+		return velocity != Vector3(0, 0, 0) || instant_velocity != Vector3(0, 0, 0);
 	}
+};
+
+struct CollisionPair {
+	Body *a; // non-static
+	Body *b;
+
+	CollisionPair(Body *a, Body *b) :
+			a(a), b(b) {}
+
+	bool operator==(const CollisionPair &other) const {
+		return (a == other.a && b == other.b) || (a == other.b && b == other.a);
+	}
+
+	bool operator!=(const CollisionPair &other) const {
+		return !(*this == other);
+	}
+
+	bool is_trigger() const {
+		return a->is_trigger || b->is_trigger;
+	}
+
+	struct Hasher {
+		static uint32_t hash(const CollisionPair &pair) {
+			uint64_t a_addr = reinterpret_cast<uint64_t>(pair.a);
+			uint64_t b_addr = reinterpret_cast<uint64_t>(pair.b);
+			return static_cast<uint32_t>(a_addr ^ b_addr);
+		}
+	};
+
+	struct Info {
+		Vector3 normal;
+		float max_sep;
+	};
 };
 
 struct Space {
@@ -98,13 +317,40 @@ struct Space {
 
 	HashMap<Vector2i, Body *> chunks;
 
-	HashSet<Body *> moving_bodies;
+	HashSet<Body *> dynamic_bodies;
+	HashMap<CollisionPair, CollisionPair::Info, CollisionPair::Hasher> cached_pairs;
 
-	Space(float chunk_size) :
-			chunk_size(chunk_size) {}
+	Space(float chunk_size) {
+		this->chunk_size = chunk_size;
+		this->gravity = Vector3(0, 0, 0);
+		for (int i = 0; i < 32; i++) {
+			layer_masks[i] = 0xFFFFFFFF;
+		}
+	}
 
-	void add_body(Body *body) {
+	void add_cached_pair(Body *a, Body *b, Vector3 normal, float max_sep) {
+		CollisionPair pair(a, b);
+		cached_pairs.insert(pair, { normal, max_sep });
+	}
+
+	Body *create_body(Vector3 position, Vector3 extent, float radius01, void *ctx, uint32_t layer, bool is_static, bool is_trigger, float mass) {
+		Body *body = new Body(ctx, layer, is_static, is_trigger, mass);
+		body->cube.apply(position, extent, radius01);
+		if (!is_static) {
+			dynamic_bodies.insert(body);
+		}
+		update_body_chunk(body);
+		return body;
+	}
+
+	void update_body_chunk(Body *body) {
 		Vector2i chunk_pos = to_chunk(body->position());
+		if (body->chunk_pos == chunk_pos) {
+			return;
+		}
+		remove_body_chunk(body);
+		body->chunk_pos = chunk_pos;
+		// add to new chunk
 		if (chunks.has(chunk_pos)) {
 			Body *head = chunks[chunk_pos];
 			body->prev = nullptr;
@@ -116,6 +362,29 @@ struct Space {
 			body->next = nullptr;
 			chunks[chunk_pos] = body;
 		}
+	}
+
+	void remove_body_chunk(Body *body) {
+		if (body->chunk_pos == INVALID_CHUNK_POS) {
+			return;
+		}
+		if (body->prev) {
+			body->prev->next = body->next;
+		} else {
+			chunks.erase(body->chunk_pos);
+		}
+		if (body->next) {
+			body->next->prev = body->prev;
+		}
+		body->chunk_pos = INVALID_CHUNK_POS;
+	}
+
+	void destroy_body(Body *body) {
+		remove_body_chunk(body);
+		if (!body->is_static) {
+			dynamic_bodies.erase(body);
+		}
+		delete body;
 	}
 
 	Vector2i to_chunk(Vector3 position) const {
@@ -151,33 +420,129 @@ struct BroadPhaseIter {
 		this->candidate = nullptr;
 	}
 
-	Body *next(AABB *p_overlap);
+	Body *next();
 };
 
-struct CollisionPair {
-	Body *a; // non-static
-	Body *b;
+// godot Node
+class CubePhysicsSpace : public Node3D {
+	GDCLASS(CubePhysicsSpace, Node3D);
 
-	CollisionPair(Body *a, Body *b) :
-			a(a), b(b) {}
+	Space *space = nullptr;
 
-	bool operator==(const CollisionPair &other) const {
-		return (a == other.a && b == other.b) || (a == other.b && b == other.a);
+	float chunk_size = 16.0f;
+
+public:
+	virtual void _enter_tree() override;
+	virtual void _exit_tree() override;
+	virtual void _physics_process(double delta) override;
+
+	Space *get_space() const {
+		return space;
 	}
 
-	bool operator!=(const CollisionPair &other) const {
-		return !(*this == other);
+	float get_chunk_size() const {
+		return this->chunk_size;
 	}
 
-	bool is_trigger() const {
-		return a->is_trigger || b->is_trigger;
+	void set_chunk_size(float chunk_size) {
+		this->chunk_size = chunk_size;
 	}
 
-	struct Hasher {
-		size_t operator()(const CollisionPair &pair) const {
-			return std::hash<Body *>()(pair.a) ^ std::hash<Body *>()(pair.b);
+	static void _bind_methods();
+};
+
+class CubePhysicsBody : public Node3D {
+	GDCLASS(CubePhysicsBody, Node3D);
+
+	Body *body = nullptr;
+
+	Vector3 extent = Vector3(1, 1, 1);
+	float radius01 = 0.0f;
+
+	uint32_t layer = 0;
+	bool is_static = false;
+	bool is_trigger = false;
+	float mass = 1.0f;
+
+public:
+	Vector3 get_extent() const {
+		return this->extent;
+	}
+
+	float get_radius01() const {
+		return this->radius01;
+	}
+
+	void set_extent(Vector3 extent) {
+		this->extent = extent;
+	}
+
+	void set_radius01(float radius01) {
+		this->radius01 = radius01;
+	}
+
+	uint32_t get_layer() const {
+		return this->layer;
+	}
+
+	void set_layer(uint32_t layer) {
+		this->layer = layer;
+	}
+
+	bool get_is_static() const {
+		return this->is_static;
+	}
+
+	void set_is_static(bool is_static) {
+		this->is_static = is_static;
+	}
+
+	bool get_is_trigger() const {
+		return this->is_trigger;
+	}
+
+	void set_is_trigger(bool is_trigger) {
+		this->is_trigger = is_trigger;
+	}
+
+	float get_mass() const {
+		return this->mass;
+	}
+
+	void set_mass(float mass) {
+		this->mass = mass;
+	}
+
+	Vector3 get_velocity() const {
+		if (body) {
+			return body->velocity;
+		} else {
+			return Vector3(0, 0, 0);
 		}
-	};
+	}
+
+	void set_velocity(Vector3 velocity) {
+		if (body) {
+			body->velocity = velocity;
+		}
+	}
+
+	Space *get_space() const {
+		Node *node = get_parent();
+		while (node) {
+			CubePhysicsSpace *space = Object::cast_to<CubePhysicsSpace>(node);
+			if (space) {
+				return space->get_space();
+			}
+			node = node->get_parent();
+		}
+		return nullptr;
+	}
+
+	virtual void _enter_tree() override;
+	virtual void _exit_tree() override;
+
+	static void _bind_methods();
 };
 
 } // namespace cube_physics

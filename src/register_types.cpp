@@ -1,17 +1,18 @@
 #include "register_types.h"
 
 #include <gdextension_interface.h>
+#include <godot_cpp/classes/editor_plugin_registration.hpp>
 #include <godot_cpp/core/defs.hpp>
 #include <godot_cpp/godot.hpp>
-#include <godot_cpp/classes/editor_plugin_registration.hpp>
 
 #include "lang/Common.hpp"
+#include "lang/PythonEditorPlugin.hpp"
 #include "lang/PythonScript.hpp"
 #include "lang/PythonScriptLanguage.hpp"
-#include "lang/PythonEditorPlugin.hpp"
 #include "lang/PythonScriptResourceFormatLoader.hpp"
 #include "lang/PythonScriptResourceFormatSaver.hpp"
 
+#include "lang/CubePhysics.hpp"
 
 using namespace godot;
 using namespace pkpy;
@@ -33,6 +34,10 @@ static void initialize(ModuleInitializationLevel p_level) {
 		PythonScriptResourceFormatSaver::register_in_godot();
 
 		printf("==> pocketpy initialized.\n");
+
+		// cube physics
+		ClassDB::register_class<cube_physics::CubePhysicsSpace>();
+		ClassDB::register_class<cube_physics::CubePhysicsBody>();
 	} else if (p_level == MODULE_INITIALIZATION_LEVEL_EDITOR) {
 		ClassDB::register_class<PythonEditorPlugin>();
 		EditorPlugins::add_by_type<PythonEditorPlugin>();
