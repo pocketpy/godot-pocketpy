@@ -13,7 +13,7 @@ static const Vector2i DIR_9[9] = {
 Body *BroadPhaseIter::next() {
 	while (true) {
 		if (candidate) {
-			if (candidate->layer & layer_mask) {
+			if (layer_mask & (1U << candidate->layer)) {
 				if (aabb.intersects(candidate->cube.aabb())) {
 					Body *retval = candidate;
 					candidate = candidate->next;
@@ -46,6 +46,10 @@ void Space::step(float delta) {
 
 		BroadPhaseIter iter(this, a->cube.aabb(), layer_masks[a->layer]);
 		while (Body *b = iter.next()) {
+			if (a == b) {
+				continue;
+			}
+
 			// narrow phase
 			// TODO: 坐标系变换到原点以减少误差
 			UnitVector3 n;
@@ -53,21 +57,18 @@ void Space::step(float delta) {
 
 			if (max_sep < 0) {
 				add_cached_pair(a, b, n.to_vec3(), max_sep);
+				print_line("max_sep: " + rtos(max_sep) + ", n: " + n.to_vec3());
 			} else {
-				AAFace a_face = a->cube.core.get_face(n);
-				AAFace b_face = b->cube.core.get_face(n.flip());
+				AAFace a_face = a->cube.core.get_face(n.flip());
+				AAFace b_face = b->cube.core.get_face(n);
 
 				Vector3 n_alt = a_face.find_closest_distance(b_face);
-				float max_sep_alt = n_alt.length() - a->cube.radius - b->cube.radius;
+				float n_alt_length = n_alt.length();
+				max_sep = n_alt_length - a->cube.radius - b->cube.radius;
 
-				if (max_sep_alt > max_sep) {
-					if (max_sep_alt < 0) {
-						add_cached_pair(a, b, n_alt.normalized(), max_sep_alt);
-					}
-				} else {
-					if (max_sep < 0) {
-						add_cached_pair(a, b, n.to_vec3(), max_sep);
-					}
+				if (max_sep < 0) {
+					add_cached_pair(a, b, n_alt / n_alt_length, max_sep);
+					print_line("max_sep_alt: " + rtos(max_sep) + ", n_alt: " + n_alt);
 				}
 			}
 		}
@@ -78,11 +79,15 @@ void Space::step(float delta) {
 		if (pair.is_trigger())
 			continue;
 
+		// a: incident body
+		// b: reference body
+		assert(info.max_sep < 0);
+
 		Vector3 n = info.normal;
 		float e = 1.0f; // restitution
 
 		// contact separation
-		Vector3 correction = n * info.max_sep;
+		Vector3 correction = n * -info.max_sep;
 		correction *= PENETRATION_CORRECTION_PERCENTAGE;
 		Vector3 v_bias = correction / delta;
 
@@ -91,7 +96,7 @@ void Space::step(float delta) {
 			// impulse-based collision resolution
 			Vector3 v_rel = pair.a->velocity;
 			float v_rel_n = v_rel.dot(n);
-			if (v_rel_n > 0) {
+			if (v_rel_n < 0) {
 				Vector3 v_delta = -(1 + e) * v_rel_n * n;
 				pair.a->velocity += v_delta;
 			}
@@ -102,7 +107,7 @@ void Space::step(float delta) {
 			// impulse-based collision resolution
 			Vector3 v_rel = pair.a->velocity - pair.b->velocity;
 			float v_rel_n = v_rel.dot(n);
-			if (v_rel_n > 0) {
+			if (v_rel_n < 0) {
 				Vector3 v_delta = -(1 + e) * v_rel_n * n;
 				pair.a->velocity += v_delta * (1 - mass_ratio);
 				pair.b->velocity -= v_delta * mass_ratio;
@@ -119,6 +124,7 @@ void Space::step(float delta) {
 		Vector3 total_vel = body->velocity + body->instant_velocity;
 		body->instant_velocity.zero();
 		body->cube.move(total_vel * delta);
+		update_body_chunk(body);
 	}
 
 	// trigger user callbacks
@@ -134,8 +140,14 @@ void Space::step(float delta) {
 void CubePhysicsSpace::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("get_chunk_size"), &CubePhysicsSpace::get_chunk_size);
 	ClassDB::bind_method(D_METHOD("set_chunk_size", "chunk_size"), &CubePhysicsSpace::set_chunk_size);
+	ClassDB::bind_method(D_METHOD("get_body_count"), &CubePhysicsSpace::get_body_count);
+	ClassDB::bind_method(D_METHOD("get_dynamic_body_count"), &CubePhysicsSpace::get_dynamic_body_count);
+	ClassDB::bind_method(D_METHOD("get_chunk_count"), &CubePhysicsSpace::get_chunk_count);
 
 	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "chunk_size"), "set_chunk_size", "get_chunk_size");
+	ADD_PROPERTY(PropertyInfo(Variant::INT, "body_count", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_EDITOR | PROPERTY_USAGE_READ_ONLY), "", "get_body_count");
+	ADD_PROPERTY(PropertyInfo(Variant::INT, "dynamic_body_count", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_EDITOR | PROPERTY_USAGE_READ_ONLY), "", "get_dynamic_body_count");
+	ADD_PROPERTY(PropertyInfo(Variant::INT, "chunk_count", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_EDITOR | PROPERTY_USAGE_READ_ONLY), "", "get_chunk_count");
 }
 
 void CubePhysicsSpace::_enter_tree() {
@@ -155,6 +167,9 @@ void CubePhysicsSpace::_exit_tree() {
 
 void CubePhysicsSpace::_physics_process(double delta) {
 	if (Engine::get_singleton()->is_editor_hint()) {
+		return;
+	}
+	if (!is_visible()) {
 		return;
 	}
 	space->step((float)delta);
@@ -180,6 +195,7 @@ void CubePhysicsBody::_bind_methods() {
 
 	ClassDB::bind_method(D_METHOD("get_velocity"), &CubePhysicsBody::get_velocity);
 	ClassDB::bind_method(D_METHOD("set_velocity", "velocity"), &CubePhysicsBody::set_velocity);
+	ClassDB::bind_method(D_METHOD("get_chunk_pos"), &CubePhysicsBody::get_chunk_pos);
 
 	ADD_PROPERTY(PropertyInfo(Variant::VECTOR3, "extent"), "set_extent", "get_extent");
 	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "radius01", PROPERTY_HINT_RANGE, "0.0,1.0"), "set_radius01", "get_radius01");
@@ -188,7 +204,8 @@ void CubePhysicsBody::_bind_methods() {
 	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "is_trigger"), "set_is_trigger", "get_is_trigger");
 	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "mass"), "set_mass", "get_mass");
 
-	ADD_PROPERTY(PropertyInfo(Variant::VECTOR3, "velocity", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_NONE), "set_velocity", "get_velocity");
+	ADD_PROPERTY(PropertyInfo(Variant::VECTOR3, "velocity", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_EDITOR), "set_velocity", "get_velocity");
+	ADD_PROPERTY(PropertyInfo(Variant::VECTOR2I, "chunk_pos", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_EDITOR | PROPERTY_USAGE_READ_ONLY), "", "get_chunk_pos");
 }
 
 void CubePhysicsBody::_enter_tree() {

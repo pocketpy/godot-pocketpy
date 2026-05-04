@@ -13,10 +13,7 @@ const float FLOAT_MAX = 1e9f;
 const float PENETRATION_CORRECTION_PERCENTAGE = 0.2f;
 const Vector2i INVALID_CHUNK_POS = Vector2i(INT_MAX, INT_MAX);
 
-struct Line {
-	Vector3 p1;
-	Vector3 p2;
-};
+using Line = Vector3[2];
 
 struct UnitVector3 {
 	int axis;
@@ -42,6 +39,14 @@ inline bool aabb_intersects(Vector3 vmin, Vector3 vmax, Vector3 other_vmin, Vect
 	float sep_z2 = vmin.z - other_vmax.z;
 
 	return sep_x1 < 0 && sep_x2 < 0 && sep_y1 < 0 && sep_y2 < 0 && sep_z1 < 0 && sep_z2 < 0;
+}
+
+inline Vector3 project_point_on_line(Vector3 point, Line line) {
+	Vector3 d = line[1] - line[0];
+	Vector3 v = point - line[0];
+	float t = v.dot(d) / d.dot(d);
+	t = CLAMP(t, 0.0f, 1.0f);
+	return line[0] + t * d;
 }
 
 inline Vector3 cross_axis(Vector3 v, int axis) {
@@ -85,22 +90,26 @@ struct AAFace {
 		}
 	}
 
-	void get_parallel_edges(int axis, Line *p_edges) const {
+	void get_parallel_edges(int axis, Line p_edges[2]) const {
 		assert(axis != normal.axis);
-		p_edges[0].p1 = vmin;
-		p_edges[0].p2 = vmax;
-		p_edges[1].p1 = vmin;
-		p_edges[1].p2 = vmax;
-		p_edges[0].p1[axis] = vmin[axis];
-		p_edges[0].p2[axis] = vmin[axis];
-		p_edges[1].p1[axis] = vmax[axis];
-		p_edges[1].p2[axis] = vmax[axis];
+		int t = 3 - normal.axis - axis;
+		p_edges[0][0] = vmin;
+		p_edges[0][1] = vmin;
+		p_edges[0][1][axis] = vmax[axis];
+		p_edges[1][0] = vmin;
+		p_edges[1][0][t] = vmax[t];
+		p_edges[1][1] = p_edges[1][0];
+		p_edges[1][1][axis] = vmax[axis];
 	}
 
 	Vector3 find_closest_distance(const AAFace &other) const {
-		float global_min_dist_squared = FLOAT_MAX;
-		Vector3 global_min_dir;
+		float min_dist_squared = FLOAT_MAX;
+		Vector3 min_dir;
 
+		// a -----
+		//		^
+		//		| normal
+		//   b -----
 		for (int axis = 0; axis < 3; axis++) {
 			if (axis == normal.axis)
 				continue;
@@ -109,49 +118,22 @@ struct AAFace {
 			get_parallel_edges(axis, edges_a);
 			other.get_parallel_edges(axis, edges_b);
 
-			// find the closest edge pair
-			float min_dist_squared = FLOAT_MAX;
-			int min_edge_a = -1;
-			int min_edge_b = -1;
-			Vector3 min_dir;
 			for (int i = 0; i < 2; i++) {
 				for (int j = 0; j < 2; j++) {
-					Vector3 dir = cross_axis(edges_b[j].p1 - edges_a[i].p1, axis);
-					if (dir.length_squared() < min_dist_squared) {
-						min_dist_squared = dir.length_squared();
-						min_edge_a = i;
-						min_edge_b = j;
-						min_dir = dir;
-					}
-				}
-			}
-			assert(min_edge_a != -1 && min_edge_b != -1);
-
-			// check overlap at this axis
-			float overlap_min = MAX(vmin[axis], other.vmin[axis]);
-			float overlap_max = MIN(vmax[axis], other.vmax[axis]);
-			float overlap = overlap_max - overlap_min;
-			if (overlap <= 0) {
-				// no overlap, use the closest vertices
-				min_dist_squared = FLOAT_MAX;
-				min_dir.zero();
-				for (int i = 0; i < 2; i++) {
-					for (int j = 0; j < 2; j++) {
-						Vector3 dir = edges_b[j].p1 - edges_a[i].p1;
+					for (int k = 0; k < 2; k++) {
+						Vector3 vert_a = edges_a[i][k];
+						Vector3 proj_b = project_point_on_line(vert_a, edges_b[j]);
+						Vector3 dir = vert_a - proj_b;
 						if (dir.length_squared() < min_dist_squared) {
 							min_dist_squared = dir.length_squared();
 							min_dir = dir;
+							// print_line("vert_a: " + vert_a + ", proj_b: " + proj_b);
 						}
 					}
 				}
 			}
-
-			if (min_dist_squared < global_min_dist_squared) {
-				global_min_dist_squared = min_dist_squared;
-				global_min_dir = min_dir;
-			}
 		}
-		return global_min_dir;
+		return min_dir;
 	}
 };
 
@@ -164,7 +146,7 @@ struct AABB {
 	AABB(Vector3 vmin, Vector3 vmax) :
 			vmin(vmin), vmax(vmax) {}
 
-	Vector3 position() const { return vmin; }
+	Vector3 position() const { return (vmin + vmax) * 0.5f; }
 	Vector3 size() const { return vmax - vmin; }
 
 	bool intersects(const AABB &other) const {
@@ -194,10 +176,10 @@ struct AABB {
 		float sep_z2 = vmin.z - other.vmax.z;
 
 		float max_sep = sep_x1;
-		*p_reference_normal = UnitVector3{ 0, 1 };
+		*p_reference_normal = UnitVector3{ 0, -1 };
 		if (sep_x2 > max_sep) {
 			max_sep = sep_x2;
-			*p_reference_normal = UnitVector3{ 0, -1 };
+			*p_reference_normal = UnitVector3{ 0, 1 };
 		}
 		if (sep_y1 > max_sep) {
 			max_sep = sep_y1;
@@ -236,7 +218,7 @@ struct Cube {
 
 	void apply(Vector3 position, Vector3 extent, float radius01) {
 		this->radius = radius01 * extent[extent.min_axis_index()];
-		Vector3 offset = (extent - Vector3(1, 1, 1) * radius);
+		Vector3 offset = (extent - Vector3(1, 1, 1) * this->radius);
 		this->core.vmin = position - offset;
 		this->core.vmax = position + offset;
 	}
@@ -266,11 +248,6 @@ struct Body {
 	}
 
 	Vector3 position() const { return cube.core.position(); }
-
-	void zero_velocity() {
-		velocity = Vector3(0, 0, 0);
-		instant_velocity = Vector3(0, 0, 0);
-	}
 
 	bool is_moving() const {
 		return velocity != Vector3(0, 0, 0) || instant_velocity != Vector3(0, 0, 0);
@@ -313,6 +290,7 @@ struct CollisionPair {
 struct Space {
 	float chunk_size;
 	Vector3 gravity;
+	int body_count;
 	uint32_t layer_masks[32];
 
 	HashMap<Vector2i, Body *> chunks;
@@ -322,6 +300,7 @@ struct Space {
 
 	Space(float chunk_size) {
 		this->chunk_size = chunk_size;
+		this->body_count = 0;
 		this->gravity = Vector3(0, 0, 0);
 		for (int i = 0; i < 32; i++) {
 			layer_masks[i] = 0xFFFFFFFF;
@@ -330,7 +309,9 @@ struct Space {
 
 	void add_cached_pair(Body *a, Body *b, Vector3 normal, float max_sep) {
 		CollisionPair pair(a, b);
-		cached_pairs.insert(pair, { normal, max_sep });
+		if (!cached_pairs.has(pair)) {
+			cached_pairs.insert(pair, CollisionPair::Info{ normal, max_sep });
+		}
 	}
 
 	Body *create_body(Vector3 position, Vector3 extent, float radius01, void *ctx, uint32_t layer, bool is_static, bool is_trigger, float mass) {
@@ -340,6 +321,7 @@ struct Space {
 			dynamic_bodies.insert(body);
 		}
 		update_body_chunk(body);
+		body_count++;
 		return body;
 	}
 
@@ -350,32 +332,32 @@ struct Space {
 		}
 		remove_body_chunk(body);
 		body->chunk_pos = chunk_pos;
-		// add to new chunk
-		if (chunks.has(chunk_pos)) {
-			Body *head = chunks[chunk_pos];
-			body->prev = nullptr;
-			body->next = head;
+		Body *head = chunks.has(chunk_pos) ? chunks[chunk_pos] : nullptr;
+		body->next = head;
+		if (head) {
 			head->prev = body;
-			chunks[chunk_pos] = body;
-		} else {
-			body->prev = nullptr;
-			body->next = nullptr;
-			chunks[chunk_pos] = body;
 		}
+		chunks[chunk_pos] = body;
 	}
 
 	void remove_body_chunk(Body *body) {
 		if (body->chunk_pos == INVALID_CHUNK_POS) {
 			return;
 		}
-		if (body->prev) {
-			body->prev->next = body->next;
+		if (!body->prev) {
+			if (body->next) {
+				chunks[body->chunk_pos] = body->next;
+			} else {
+				chunks.erase(body->chunk_pos);
+			}
 		} else {
-			chunks.erase(body->chunk_pos);
+			body->prev->next = body->next;
 		}
 		if (body->next) {
 			body->next->prev = body->prev;
 		}
+		body->prev = nullptr;
+		body->next = nullptr;
 		body->chunk_pos = INVALID_CHUNK_POS;
 	}
 
@@ -384,6 +366,7 @@ struct Space {
 		if (!body->is_static) {
 			dynamic_bodies.erase(body);
 		}
+		body_count--;
 		delete body;
 	}
 
@@ -393,13 +376,24 @@ struct Space {
 				static_cast<int>(floor(position.z / chunk_size)));
 	}
 
-	void point_cast(Vector3 point);
-	void ray_cast(Vector3 from, Vector3 to, float max_distance);
-	void circle_cast(Vector3 center, float radius);
-	void sphere_cast(Vector3 center, float radius);
-	void cube_cast(AABB cube);
+	// void point_cast(Vector3 point);
+	// void ray_cast(Vector3 from, Vector3 to, float max_distance);
+	// void circle_cast(Vector3 center, float radius);
+	// void sphere_cast(Vector3 center, float radius);
+	// void cube_cast(AABB cube);
 
 	void step(float delta);
+
+	~Space() {
+		for (auto &[chunk_pos, body] : chunks) {
+			Body *curr = body;
+			while (curr) {
+				Body *next = curr->next;
+				delete curr;
+				curr = next;
+			}
+		}
+	}
 };
 
 struct BroadPhaseIter {
@@ -446,6 +440,18 @@ public:
 
 	void set_chunk_size(float chunk_size) {
 		this->chunk_size = chunk_size;
+	}
+
+	int get_body_count() const {
+		return space ? space->body_count : 0;
+	}
+
+	int get_dynamic_body_count() const {
+		return space ? space->dynamic_bodies.size() : 0;
+	}
+
+	int get_chunk_count() const {
+		return space ? space->chunks.size() : 0;
 	}
 
 	static void _bind_methods();
@@ -524,6 +530,14 @@ public:
 	void set_velocity(Vector3 velocity) {
 		if (body) {
 			body->velocity = velocity;
+		}
+	}
+
+	Vector2i get_chunk_pos() const {
+		if (body) {
+			return body->chunk_pos;
+		} else {
+			return INVALID_CHUNK_POS;
 		}
 	}
 
